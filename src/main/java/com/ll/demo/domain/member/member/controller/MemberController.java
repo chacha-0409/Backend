@@ -10,6 +10,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+//리리팩토링 시 삭제?
 //HTTP 요청 처리용
 @Controller
 @RequiredArgsConstructor

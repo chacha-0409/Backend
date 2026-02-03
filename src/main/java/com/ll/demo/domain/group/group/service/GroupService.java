@@ -35,6 +35,13 @@ public class GroupService {
     private final GroupJoinRequestRepository groupJoinRequestRepository;
     private final QuoteRepository quoteRepository;
 
+    // 더블체크 - 회원 추가 검증
+    private void validateGroupCapacity(Group group) {
+        if (groupMemberRepository.countByGroup(group) >= 5) {
+            throw new RuntimeException("그룹 인원은 최대 5명까지입니다.");
+        }
+    }
+
     // 그룹 생성 - 수정
     public GroupResponse createGroup(Member leader, GroupRequest req) {
         Group group = Group.builder()
@@ -87,25 +94,41 @@ public class GroupService {
                 .toList();
     }
 
-    // 그룹 초대
-    public void inviteFriend(Member requester, Long groupId, Long friendId) {
-        Group group = groupRepository.findById(groupId)
-                .orElseThrow(() -> new RuntimeException("그룹을 찾을 수 없습니다."));
+    // 그룹 초대 - 친구 accepted 여부 체크 강화
+    // GroupService.java
 
-        boolean isMember = groupMemberRepository.existsByGroupAndMember(group, requester);
-        if (!isMember) throw new RuntimeException("그룹 멤버만 친구를 초대할 수 있습니다.");
-        if (groupMemberRepository.countByGroup(group) >= 5) throw new RuntimeException("최대 인원(5명)을 초과했습니다.");
-        Member friend = memberRepository.findById(friendId)
-                .orElseThrow(() -> new RuntimeException("초대할 회원을 찾을 수 없습니다."));
-        if (!friendshipRepository.existsByMemberAndFriend(requester, friend)) throw new RuntimeException("친구 관계인 회원만 초대 가능합니다.");
-        if (groupMemberRepository.existsByGroupAndMember(group, friend)) throw new RuntimeException("이미 그룹에 포함된 회원입니다.");
+@Transactional
+public void inviteFriend(Member requester, Long groupId, Long friendId) {
+    Group group = groupRepository.findById(groupId)
+            .orElseThrow(() -> new RuntimeException("그룹을 찾을 수 없습니다."));
 
-        GroupMember newMember = GroupMember.builder()
-                .group(group)
-                .member(friend)
-                .build();
-        groupMemberRepository.save(newMember);
+    if (!groupMemberRepository.existsByGroupAndMember(group, requester)) {
+        throw new RuntimeException("그룹 멤버만 친구를 초대할 수 있습니다.");
     }
+
+    Member friend = memberRepository.findById(friendId)
+            .orElseThrow(() -> new RuntimeException("초대할 회원을 찾을 수 없습니다."));
+
+    // 친구 관계인지 확인
+    boolean isFriend = friendshipRepository.existsByMemberAndFriend(requester, friend);
+    if (!isFriend) {
+        throw new RuntimeException("친구 관계인 회원만 초대할 수 있습니다.");
+    }
+
+    if (groupMemberRepository.countByGroup(group) >= 5) {
+        throw new RuntimeException("그룹 정원(5명)이 꽉 찼습니다.");
+    }
+
+    if (groupMemberRepository.existsByGroupAndMember(group, friend)) {
+        throw new RuntimeException("이미 이 그룹의 멤버입니다.");
+    }
+
+    GroupMember newMember = GroupMember.builder()
+            .group(group)
+            .member(friend)
+            .build();
+    groupMemberRepository.save(newMember);
+}
 
     // 탈퇴나 삭제
     public void removeOrLeaveMember(Member requester, Long groupId, Long targetId) {
@@ -123,6 +146,8 @@ public class GroupService {
     // 그룹 가입 요청
     public void requestToJoin(Member user, Long groupId) {
         Group group = groupRepository.findById(groupId).orElseThrow();
+
+        validateGroupCapacity(group); // 그룹원 제한 더블체크
 
         if (groupMemberRepository.existsByGroupAndMember(group, user)) {
             throw new RuntimeException("이미 그룹 멤버입니다.");
@@ -150,6 +175,9 @@ public class GroupService {
             joinReq.accept();
             return;
         }
+
+        validateGroupCapacity(group); // 그룹원 제한 더블체크
+
 
         if (groupMemberRepository.countByGroup(group) >= 5) throw new RuntimeException("인원 초과");
 

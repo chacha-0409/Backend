@@ -121,16 +121,23 @@ public class ApiV1MemberController {
         return ResponseEntity.ok(response);
     }
 
+    // ApiV1MemberController.java 내 guestLogin 메서드 보완
+
     @PostMapping("/guest-login")
     public RsData<LoginResponseBody> guestLogin(HttpServletResponse response) {
+        // MemberService에서 더미 데이터가 포함된 계정 생성or가져오기
         Member guest = memberService.findOrCreateGuest();
 
+        log.info("Guest login initiated: {}", guest.getEmail());
+
+        // 토큰 생성-AppConfig 설정값
         String accessToken = authTokenService.genToken(guest, AppConfig.getAccessTokenExpirationSec());
         String refreshToken = memberService.genRefreshToken(guest);
 
         rq.setCookie(response, "accessToken", accessToken, AppConfig.getAccessTokenExpirationSec());
         rq.setCookie(response, "refreshToken", refreshToken, 60 * 60 * 24 * 30);
 
+        // SecurityContext 등록 - 즉시 인증 확인
         SecurityUser securityUser = new SecurityUser(guest, guest.getEmail(), "", guest.getAuthorities());
         Authentication auth = new UsernamePasswordAuthenticationToken(securityUser, null, securityUser.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(auth);

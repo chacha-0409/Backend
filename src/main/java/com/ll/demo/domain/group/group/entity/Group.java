@@ -25,8 +25,12 @@ public class Group extends BaseTime {
     @JoinColumn(name = "leader_id")
     private Member leader;
 
-    // 그룹 삭제되면 멤버도 삭제
-    @Builder.Default
+    // 그룹 삭제되면 멤버도 삭제 - 연관 엔티티 모두 cascade로 동시 삭제하도록 수정
     @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<GroupMember> members = new ArrayList<>();
+
+    @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<GroupJoinRequest> joinRequests = new ArrayList<>();
 }
