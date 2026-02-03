@@ -6,6 +6,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -13,10 +14,11 @@ public class S3Service {
 
     private final S3Template s3Template; // Spring Cloud AWS가 제공하는 도구
 
-    //@Value("${spring.cloud.aws.s3.bucket}")
-    //private String bucket;
+    // yml 파일 버킷 읽어오도록 임시 주석 해제
+    @Value("${spring.cloud.aws.s3.bucket}")
+    private String bucket;
 
-    private String bucket = "quoteme-likelion-bucket";
+    //private String bucket = "quoteme-likelion-bucket";
     public String uploadFile(MultipartFile file) throws IOException {
         // 1. 파일 이름 중복 방지를 위해 UUID 생성
         String originalFilename = file.getOriginalFilename();

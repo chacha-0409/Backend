@@ -24,6 +24,9 @@ import com.ll.demo.domain.quote.repository.QuoteTagRepository;
 import com.ll.demo.global.exceptions.GlobalException;
 import com.ll.demo.global.rsData.RsData;
 import com.ll.demo.global.security.AuthTokenService;
+import com.ll.demo.domain.quote.repository.QuoteTagRequestRepository;
+import com.ll.demo.domain.quote.entity.TagRequestStatus;
+import com.ll.demo.domain.quote.entity.QuoteTagRequest;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,6 +53,7 @@ public class MemberService {
     private final QuoteRepository quoteRepository;
     private final QuoteLikeRepository quoteLikeRepository;
     private final QuoteTagRepository quoteTagRepository;
+    private final QuoteTagRequestRepository quoteTagRequestRepository;
 
     // 이메일로 회원 조회
     @Transactional(readOnly = true)
@@ -107,22 +111,27 @@ public class MemberService {
     }
 
     // 프로필 정보 수정
-    @Transactional
-    public void updateProfile(Long memberId, ProfileUpdateRequest request, String imageUrl) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new GlobalException("404", "회원을 찾을 수 없습니다."));
+// MemberService.java
 
-        // 1. 닉네임, 소개글 변경 (기존 로직 유지)
-        member.setNickname(request.getNickname());
-        member.setIntroduction(request.getIntroduction());
+@Transactional
+public void updateProfile(Long memberId, ProfileUpdateRequest request, String imageUrl) {
+    Member member = memberRepository.findById(memberId)
+            .orElseThrow(() -> new GlobalException("404", "회원을 찾을 수 없습니다."));
 
-        // 2. 프로필 이미지 변경 (수정된 핵심 로직)
-        // 컨트롤러에서 넘겨준 S3 URL이 있다면, 그것으로 DB를 업데이트합니다.
-        // (imageUrl이 null이면, 새 사진을 안 올렸다는 뜻이니 기존 사진을 유지합니다.)
-        if (imageUrl != null && !imageUrl.isEmpty()) {
-            member.setProfileImage(imageUrl);
+    // 값이 있는 필드만 수정하도록 로직 수정
+    if (request != null) {
+        if (request.getNickname() != null && !request.getNickname().isBlank()) {
+            member.setNickname(request.getNickname());
+        }
+        if (request.getIntroduction() != null) {
+            member.setIntroduction(request.getIntroduction());
         }
     }
+
+    if (imageUrl != null && !imageUrl.isEmpty()) {
+        member.setProfileImage(imageUrl);
+    }
+}
 
 //    // 닉네임, 이메일, 그룹명으로 회원 검색
 //    public List<MemberSearchResponse> searchMembers(String keyword, Long currentMemberId) {
@@ -262,18 +271,50 @@ public class MemberService {
             // 기존 명언 생성 - 좋아요, 태그 포함
             // 오늘
             LocalDateTime now = LocalDateTime.now(); // 기준 시간 - 서버 실행 시점의 오늘 날짜
-            Quote q1 = createDemoQuote(kju, "가장 빛나는 별은 아직 발견되지 않은 별이다", "아 완전 뒤처진 것 같음 근데 아직 젊으니까 미래는 창창한 거 아닌가?", now.minusHours(3));
-            Quote q2 = createDemoQuote(jjang, "진정한 용기는 두려움을 느끼지 않는 것이 아니라 두려움을 느끼면서도 해내는 것이다", "어제 겁나서 도망갈뻔했는데 내가 해냄", now.minusHours(1));
+            Quote q1 = createDemoQuote(
+                kju, 
+                "가장 빛나는 별은 아직 발견되지 않은 별이다", 
+                "아 완전 뒤처진 것 같음 근데 아직 젊으니까 미래는 창창한 거 아닌가?", 
+                now.minusHours(3));
+            Quote q2 = createDemoQuote(
+                jjang, 
+                "진정한 용기는 두려움을 느끼지 않는 것이 아니라 두려움을 느끼면서도 해내는 것이다", 
+                "어제 겁나서 도망갈뻔했는데 내가 해냄", 
+                now.minusHours(1));
             // 어제
             LocalDateTime yesterday = now.minusDays(1);
-            Quote q7 = createDemoQuote(guest, "가장 어두운 밤이 지나고 나면, 가장 빛나는 새벽이 온다", "매일매일 남들 놀러다닐 때 나만 공부하느라 처박혀 있느라 힘들었고 울기도 많이 울었다. 그런데 오늘 1차 붙었다는 소식 받으니까 진짜 그 고생이 다 이걸 위해서인 것 같아서 눈물이 또 남...ㅎㅎ", yesterday.withHour(4));
-            Quote q3 = createDemoQuote(haeoni, "어제보다 나은 오늘은 내가 만들어가는 것", "어제 열역학 공부하느라 밤새고 밥도 맛없는거 먹어서 우울했다... 오늘 12시간 자고 애들이랑 놀고왔더니 훨씬 낫다.", yesterday.withHour(10));
-            Quote q4 = createDemoQuote(jjang, "아름답지 않은 것에서 발견하는 아름다움", "엄마가 사준 옷 너무 못생김 근데 엄마 마음이 예쁘다 생각하고 걍 입으려고 근데 밖에서는 못입을거같아ㅠㅠ", yesterday.withHour(13));
-            Quote q5 = createDemoQuote(kju, "중요한 것은 성공하는 능력보다 실패를 거듭하는 능력이다", "다이어트 중인데 어제 엽떡먹고 오늘 두쫀쿠 4개먹음ㅋㅋㅋㅋㅋ 근데 오늘부터 다시 시작하면 됨", yesterday.withHour(22));
+            Quote q7 = createDemoQuote(
+                guest, 
+                "어디선가 보이지 않던 것들이, 다른 곳에선 삶의 일부가 된다.", 
+                "독일 여행을 할 때는 고양이를 본 적이 없는데 튀니지에는 고양이가 참 많다 그래서 좋다", 
+                yesterday.withHour(4));
+            Quote q3 = createDemoQuote(
+                haeoni, 
+                "멈추면 비로소 삶을 진실로 알게 되리라.", 
+                "나는 하루종일 누워있는 게 적성에 딱맞음 진심", 
+                yesterday.withHour(10));
+            Quote q4 = createDemoQuote(
+                jjang, 
+                "기침과 사랑은 숨겨지지 않는다", 
+                "두쫀쿠 너무 열정적으로 먹었나봐 코코아가루 뿜고 옷에 다 묻음",
+                yesterday.withHour(13));
+            Quote q5 = createDemoQuote(
+                kju, 
+                "이 길이 멀고 험한 이유는, 그 끝에 누구도 모르는 세상이 기다리고 있기 때문이다.", 
+                "혼자 이렇게 떨어져 있으니까 너무 힘들다 하지만 생각을 바꿔서 열심히 하기로 함!!!", 
+                yesterday.withHour(22));
             // 이틀 전
             LocalDateTime twoDaysAgo = now.minusDays(2);
-            Quote q6 = createDemoQuote(haeoni, "포기하는 순간 시합은 종료야", "시험 3시간 남았는데 이제 개강!! 벌써 망한것같지만 일단 끝까지 드가자 여법러들아 다죽자", twoDaysAgo.withHour(15));
-            Quote q8 = createDemoQuote(guest, "자신에게 너그럽고 친절하라, 자신을 사랑하라", "너무 뚱뚱해서 딱 붙는 옷 절대 못 입었는데 오늘 눈 딱 감고 붙는 티 입었더니 생각보다 괜찮았다 내가 나한테 너무 소홀했던 것 같다 나한테 잘해줘야겠다 생각을 했다", twoDaysAgo.withHour(15));
+            Quote q6 = createDemoQuote(
+                haeoni, 
+                "삶의 가장 커다란 기쁨은 사랑하는 사람과의 사소한 시간이다.", 
+                "고구마 잘못 사서 엄마랑 엄청 웃었다!!! 별거 아닌데 기뻤다", 
+                twoDaysAgo.withHour(15));
+            Quote q8 = createDemoQuote(
+                guest, 
+                "다시 일어설 힘은 항상 내 안에 있다.", 
+                "​다이어트 콘텐츠 한다면서 살 4키로 뺐는데 술 먹어서 도로 2키로 찜 ㄱㅊ아. 이제 운동해야지...",
+                twoDaysAgo.withHour(15));
 
 
             quoteLikeRepository.save(new QuoteLike(q1, haeoni));
@@ -307,19 +348,19 @@ public class MemberService {
         friendshipRepository.save(Friendship.builder().member(m2).friend(m1).status(FriendshipStatus.ACCEPTED).build());
     }
 
-    private Quote createDemoQuote(Member author, String content, String original, LocalDateTime createdAt) {
+    private Quote createDemoQuote(Member author, String summary, String original, LocalDateTime createdAt) {
         Quote quote = Quote.builder()
                 .author(author)
-                .content(content)
-                .originalContent(original)
+                .content(summary)           // ai 명언
+                .originalContent(original)  // 원본 일기 내용
+                .summary(summary)           // dto 호환 - 리팩토링 시 정리?
                 .build();
+        
         quoteRepository.saveAndFlush(quote);
-
         quote.setCreateDateForDemo(createdAt);
 
         return quoteRepository.saveAndFlush(quote);
     }
-
     public void save(Member member) {
         memberRepository.save(member);
     }

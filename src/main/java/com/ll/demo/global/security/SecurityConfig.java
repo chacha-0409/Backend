@@ -27,31 +27,26 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorizeHttpRequests ->
                         authorizeHttpRequests
-                                // 회원가입에 대해 인증 없이 접근 허용
-                                .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login")
-                                .permitAll()
-                                .requestMatchers(HttpMethod.POST, "/api/*/members", "/api/*/members/login")
-                                .permitAll()
-                                .requestMatchers(HttpMethod.DELETE, "/api/*/members/logout")
-                                .permitAll()
-                                .requestMatchers("/api/auth/guest-login", "/api/auth/login", "/api/v1/members/login")
-                                .permitAll()
-                                .requestMatchers("/api/auth/refresh")
-                                .permitAll()
-                                .requestMatchers("/h2-console/**")
-                                .permitAll()
-                                .requestMatchers("/actuator/**")
-                                .permitAll()
-                                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
-                                .permitAll()
-                                .requestMatchers(HttpMethod.GET, "/")
-                                .permitAll()
-                                .requestMatchers(HttpMethod.GET, "/g/*")
-                                .permitAll()
-                                .requestMatchers("/", "/api/**", "/favicon.ico", "/error").permitAll()
-                                .anyRequest()
-                                .authenticated()
-                )
+                                // 화이트리스트
+                                // 개발도구 
+                                .requestMatchers("/", "/favicon.ico", "/error").permitAll()
+                                .requestMatchers("/h2-console/**", "/actuator/**").permitAll()
+                                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+
+                                // 인증, 로그인, 회원가입 등
+                                .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login", "/api/auth/guest-login").permitAll()
+                                .requestMatchers("/api/auth/refresh").permitAll()
+                                
+                                //.requestMatchers(HttpMethod.POST, "/api/*/members", "/api/*/members/login").permitAll()
+                                //.requestMatchers(HttpMethod.GET, "/g/*").permitAll()
+
+                                // 로그아웃은 일단 permitAll
+                                .requestMatchers("/api/auth/logout").permitAll()
+
+                                // 이하 모든 api 및 요청은 인증 필수
+                                .requestMatchers("/api/**").authenticated()
+                                .anyRequest().authenticated()
+                        )
                 .headers(
                         headers ->
                                 headers.frameOptions(

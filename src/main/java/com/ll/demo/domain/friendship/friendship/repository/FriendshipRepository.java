@@ -13,8 +13,11 @@ public interface FriendshipRepository extends JpaRepository<Friendship, Long> {
     boolean existsByMemberAndFriend(Member member, Member friend);
     // 받은 친구 요청 목록 조회
     List<Friendship> findByFriendAndStatus(Member friend, FriendshipStatus status);
-    //친구 수
+    // 친구 수
     long countByMember(Member member);
     // 친구삭제
     void deleteByMemberAndFriend(Member member, Member friend);
+
+    // 추후 친구 쌍방향 수락해야 한다면 > 친구 관계 accepted 여부 확인
+    // boolean existsByMemberAndFriendAndStatus(Member member, Member friend, FriendshipStatus status);
 }
