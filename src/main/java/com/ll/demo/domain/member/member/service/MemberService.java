@@ -107,22 +107,27 @@ public class MemberService {
     }
 
     // 프로필 정보 수정
-    @Transactional
-    public void updateProfile(Long memberId, ProfileUpdateRequest request, String imageUrl) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new GlobalException("404", "회원을 찾을 수 없습니다."));
+// MemberService.java
 
-        // 1. 닉네임, 소개글 변경 (기존 로직 유지)
-        member.setNickname(request.getNickname());
-        member.setIntroduction(request.getIntroduction());
+@Transactional
+public void updateProfile(Long memberId, ProfileUpdateRequest request, String imageUrl) {
+    Member member = memberRepository.findById(memberId)
+            .orElseThrow(() -> new GlobalException("404", "회원을 찾을 수 없습니다."));
 
-        // 2. 프로필 이미지 변경 (수정된 핵심 로직)
-        // 컨트롤러에서 넘겨준 S3 URL이 있다면, 그것으로 DB를 업데이트합니다.
-        // (imageUrl이 null이면, 새 사진을 안 올렸다는 뜻이니 기존 사진을 유지합니다.)
-        if (imageUrl != null && !imageUrl.isEmpty()) {
-            member.setProfileImage(imageUrl);
+    // 값이 있는 필드만 수정하도록 로직 수정
+    if (request != null) {
+        if (request.getNickname() != null && !request.getNickname().isBlank()) {
+            member.setNickname(request.getNickname());
+        }
+        if (request.getIntroduction() != null) {
+            member.setIntroduction(request.getIntroduction());
         }
     }
+
+    if (imageUrl != null && !imageUrl.isEmpty()) {
+        member.setProfileImage(imageUrl);
+    }
+}
 
 //    // 닉네임, 이메일, 그룹명으로 회원 검색
 //    public List<MemberSearchResponse> searchMembers(String keyword, Long currentMemberId) {

@@ -37,6 +37,10 @@ public class Quote extends BaseTime {
     @Column(columnDefinition = "TEXT")
     private String originalContent; // 원본 일기 내용
 
+    // summary 필드 추가!
+    @Column(columnDefinition = "TEXT")
+    private String summary;
+
     // [추가] 조회할 때 태그된 정보를 쉽게 가져오기 위해 연결
     @OneToMany(mappedBy = "quote", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default // Builder 패턴 쓸 때 초기화 방지

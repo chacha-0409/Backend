@@ -45,11 +45,11 @@ public class SettingsController {
         return ResponseEntity.ok(response);
     }
 
-    // 프로필 수정
+    // 프로필 수정 - 하나씩만 수정 가능하도록 수정
     @PutMapping(value = "/profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE) // 멀티파트 요청 허용
     public ResponseEntity<Void> updateProfile(
             // JSON 데이터는 'data'라는 이름으로
-            @RequestPart(value = "data") ProfileUpdateRequest request,
+            @RequestPart(value = "data", required = false) ProfileUpdateRequest request,
             // 이미지 파일은 'image'라는 이름으로
             @RequestPart(value = "image", required = false) MultipartFile image,
             @AuthenticationPrincipal SecurityUser securityUser

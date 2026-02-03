@@ -10,7 +10,7 @@ public record MyQuoteResponse(
 ) {
     public static MyQuoteResponse from(Quote quote, String groupName) {
         return new MyQuoteResponse(
-                quote.getContent(),
+                quote.getSummary(), // ai 요약 데이터만 summary로 교체
                 groupName,
                 quote.getAuthor().getNickname(),
                 quote.getAuthor().getBirthYear()

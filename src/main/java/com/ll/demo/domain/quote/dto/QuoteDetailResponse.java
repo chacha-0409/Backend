@@ -27,7 +27,7 @@ public record QuoteDetailResponse(
 
         return new QuoteDetailResponse(
                 quote.getId(),
-                quote.getContent(),
+                quote.getSummary(), // 데이터만 summary로 교체
                 taggedNicknames,
                 quote.getAuthor().getNickname(),
                 quote.getAuthor().getProfileImage(),
