@@ -25,6 +25,10 @@ public record QuoteDetailResponse(
         Duration duration = Duration.between(quote.getCreateDate(), LocalDateTime.now());
         String timeAgo = formatDuration(duration);
 
+        String content = (quote.getSummary() != null && !quote.getSummary().isBlank())
+                ? quote.getSummary()
+                : quote.getContent();
+
         return new QuoteDetailResponse(
                 quote.getId(),
                 quote.getSummary(), // 데이터만 summary로 교체

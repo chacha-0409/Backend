@@ -8,6 +8,6 @@ public interface PokeRepository extends JpaRepository<Poke, Long> {
     // 이미 오늘 찔렀는지 확인 (중복 찌르기 방지용 - 선택 사항)
     // boolean existsBySenderIdAndReceiverIdAndCreateDateBetween(...) // 이건 나중에 필요하면 추가
 
-    // 특정 유저가 받은 찌르기 횟수 카운트
+    // 내가 받은 콕 찌르기 개수
     long countByReceiverId(Long receiverId);
 }

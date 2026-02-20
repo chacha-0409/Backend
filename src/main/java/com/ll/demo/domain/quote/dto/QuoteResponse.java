@@ -21,7 +21,7 @@ public record QuoteResponse(
                 quote.getOriginalContent(),
                 quote.getAuthor().getNickname(),
                 Integer.valueOf(quote.getAuthor().getBirthYear()),
-                quote.getTags().stream()
+                quote.getQuoteTags().stream()
                                 .map(tag -> tag.getMember().getName())
                                 .toList(),
                 quote.getCreateDate()

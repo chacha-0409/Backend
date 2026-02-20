@@ -1,37 +1,30 @@
 package com.ll.demo.domain.member.member.controller;
 
 import com.ll.demo.AppConfig;
-import com.ll.demo.domain.member.member.dto.MemberDto;
-import com.ll.demo.domain.member.member.dto.MemberJoinReqBody;
-import com.ll.demo.domain.member.member.dto.MemberJoinRespBody;
-import com.ll.demo.domain.member.member.dto.MemberLoginReqBody;
+import com.ll.demo.domain.member.member.dto.*;
 import com.ll.demo.domain.member.member.entity.Member;
+import com.ll.demo.domain.member.member.repository.MemberRepository;
 import com.ll.demo.domain.member.member.service.MemberService;
 import com.ll.demo.global.exceptions.GlobalException;
 import com.ll.demo.global.rsData.RsData;
 import com.ll.demo.global.security.AuthTokenService;
-import com.ll.demo.standard.rq.Rq;
 import com.ll.demo.global.security.SecurityUser;
-import com.ll.demo.domain.member.member.dto.MemberJoinRespBody;
-import com.ll.demo.domain.member.member.dto.SearchCombinedResponse;
-import jakarta.servlet.http.Cookie;
+import com.ll.demo.standard.rq.Rq;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
-import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 
 @RestController
@@ -43,6 +36,7 @@ public class ApiV1MemberController {
     private final MemberService memberService;
     private final Rq rq;
     private final AuthTokenService authTokenService;
+    private final MemberRepository memberRepository;
 
     // 회원가입
     @PostMapping("/signup")
@@ -107,7 +101,7 @@ public class ApiV1MemberController {
 
     // 회원 및 그룹 통합 검색
     @GetMapping("/search")
-    public ResponseEntity<SearchCombinedResponse> searchMembers(
+    public ResponseEntity<com.ll.demo.domain.member.member.dto.SearchCombinedResponse> searchMembers(
             @RequestParam(value = "keyword", required = true) String keyword,
             @AuthenticationPrincipal SecurityUser securityUser
     ) {
@@ -117,7 +111,7 @@ public class ApiV1MemberController {
 
         Long currentMemberId = securityUser.getMember().getId();
 
-        SearchCombinedResponse response = memberService.searchCombined(keyword, currentMemberId);
+        com.ll.demo.domain.member.member.dto.SearchCombinedResponse response = memberService.searchCombined(keyword, currentMemberId);
         return ResponseEntity.ok(response);
     }
 
@@ -173,5 +167,23 @@ public class ApiV1MemberController {
         rq.setCookie(response, "accessToken", newAccessToken, AppConfig.getAccessTokenExpirationSec());
 
         return RsData.of("200-3", new LoginResponseBody(MemberDto.of(member), newAccessToken));
+    }
+
+    // 다른 회원 프로필
+    @RestController
+    @RequestMapping("/api/profile") // 에러가 났던 주소와 맞춥니다.
+    @RequiredArgsConstructor
+    public class MemberController {
+
+        private final MemberService memberService; // 기존에 있던 MemberService 주입
+
+        @GetMapping("/{id}")
+        public ResponseEntity<MemberResponse> getMemberProfile(@PathVariable Long id) {
+            // memberService에서 회원을 찾아 DTO로 변환하여 반환하는 로직 필요
+            Member member = memberRepository.findById(id)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "회원을 찾을 수 없습니다."));
+
+            return ResponseEntity.ok(new MemberResponse(member));
+        }
     }
 }
