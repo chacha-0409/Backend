@@ -74,7 +74,8 @@ public class ApiV1MemberController {
 
     @PostMapping("/login")
     public RsData<LoginResponseBody> login(@Valid @RequestBody MemberLoginReqBody body, HttpServletResponse response) {
-        Member member = memberService.findByEmail(body.getEmail()).orElseThrow(() -> new RuntimeException("해당 회원을 찾을 수 없습니다."));
+        Member member = memberService.findByEmail(body.getEmail())
+                .orElseThrow(() -> new GlobalException("404-1", "존재하지 않는 계정입니다. 회원가입으로 이동하시겠어요?"));
 
         String accessToken = authTokenService.genToken(member, AppConfig.getAccessTokenExpirationSec());
         String refreshToken = memberService.genRefreshToken(member);
@@ -97,22 +98,6 @@ public class ApiV1MemberController {
         rq.setCookie(response, "refreshToken", "", 0);
 
         return RsData.of("200-2", null);
-    }
-
-    // 회원 및 그룹 통합 검색
-    @GetMapping("/search")
-    public ResponseEntity<com.ll.demo.domain.member.member.dto.SearchCombinedResponse> searchMembers(
-            @RequestParam(value = "keyword", required = true) String keyword,
-            @AuthenticationPrincipal SecurityUser securityUser
-    ) {
-        if (securityUser == null) {
-            throw new GlobalException("401", "로그인이 필요합니다.");
-        }
-
-        Long currentMemberId = securityUser.getMember().getId();
-
-        com.ll.demo.domain.member.member.dto.SearchCombinedResponse response = memberService.searchCombined(keyword, currentMemberId);
-        return ResponseEntity.ok(response);
     }
 
     // ApiV1MemberController.java 내 guestLogin 메서드 보완

@@ -65,7 +65,16 @@ db_dev.trace.db
 hs_err_pid*
 replay_pid*
 
-# yml 파일들이 업로드x
+# yml 파일들이 업로드x (시크릿 포함 파일 제외)
 *.yml
+!src/main/resources/application.yml
+!src/main/resources/application-prod.yml
+!docker-compose.prod.yml
+!.github/workflows/*.yml
+
+# EC2 배포용 환경변수 파일 (절대 커밋 금지)
+.env
+.env.*
+!.env.example
 
 _vol/

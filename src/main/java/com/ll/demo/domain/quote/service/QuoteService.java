@@ -2,19 +2,17 @@ package com.ll.demo.domain.quote.service;
 
 import com.ll.demo.domain.friendship.friendship.entity.Friendship;
 import com.ll.demo.domain.friendship.friendship.repository.FriendshipRepository;
+import com.ll.demo.domain.group.group.entity.Group;
 import com.ll.demo.domain.group.group.entity.GroupMember;
 import com.ll.demo.domain.group.group.repository.GroupMemberRepository;
+import com.ll.demo.domain.group.group.repository.GroupRepository;
 import com.ll.demo.domain.member.member.entity.Member;
 import com.ll.demo.domain.member.member.repository.MemberRepository;
 import com.ll.demo.domain.notification.service.NotificationService;
 import com.ll.demo.domain.quote.dto.*;
 import com.ll.demo.domain.quote.entity.*;
-import com.ll.demo.domain.quote.repository.QuoteLikeRepository;
-import com.ll.demo.domain.quote.repository.QuoteRepository;
-import com.ll.demo.domain.quote.repository.QuoteTagRepository;
-import com.ll.demo.domain.quote.repository.QuoteTagRequestRepository;
+import com.ll.demo.domain.quote.repository.*;
 import com.ll.demo.global.exceptions.GlobalException;
-import com.ll.demo.global.gemini.GeminiService;
 import com.ll.demo.global.security.SecurityUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,6 +26,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,18 +42,68 @@ public class QuoteService {
     private final NotificationService notificationService;
     private final FriendshipRepository friendshipRepository;
     private final GroupMemberRepository groupMemberRepository;
-    private final GeminiService geminiService;
+    private final GroupRepository groupRepository;
+    private final BookmarkRepository bookmarkRepository;
 
-    // 명언 작성
+    // ─────────────────────────────────────────────
+    //  입력 검증
+    // ─────────────────────────────────────────────
+
+    /** 명언(content) 검증: 30자 초과 불가, 불량 텍스트 불가 */
+    private void validateQuoteContent(String content) {
+        if (content == null || content.isBlank()) {
+            throw new GlobalException("400-1", "내용을 입력해주세요.");
+        }
+        if (content.length() > 30) {
+            throw new GlobalException("400-2", "30자를 초과한 글은 게시할 수 없습니다.");
+        }
+        if (isLowQualityText(content)) {
+            throw new GlobalException("400-3", "초성이나 특수문자로만 이루어진 글은 게시할 수 없습니다.");
+        }
+    }
+
+    /** 일기(diary) 검증: 15자 이하 경고, 불량 텍스트 불가 */
+    public void validateDiaryContent(String content) {
+        if (content == null || content.isBlank()) {
+            throw new GlobalException("400-1", "내용을 입력해주세요.");
+        }
+        if (isLowQualityText(content)) {
+            throw new GlobalException("400-3", "초성이나 특수문자로만 이루어진 글은 게시할 수 없습니다.");
+        }
+        if (content.trim().length() <= 15) {
+            throw new GlobalException("400-4", "15자 이하의 글은 양질의 명언을 만들기 어려워요");
+        }
+    }
+
+    /**
+     * 저품질 텍스트 판별:
+     *  - 한국어 자음(ㄱ~ㅎ)으로만 구성된 경우
+     *  - 특수문자/공백으로만 구성된 경우
+     */
+    private boolean isLowQualityText(String text) {
+        String noSpace = text.replaceAll("\\s", "");
+        if (noSpace.isBlank()) return true;
+
+        // 한국어 자음만 (U+3131~U+314E)
+        boolean onlyKoreanConsonants = noSpace.chars().allMatch(c -> c >= 0x3131 && c <= 0x314E);
+        if (onlyKoreanConsonants) return true;
+
+        // 글자(letter) 또는 숫자가 하나도 없으면 특수문자만
+        boolean onlySpecialChars = noSpace.chars().noneMatch(Character::isLetterOrDigit);
+        return onlySpecialChars;
+    }
+
+    // ─────────────────────────────────────────────
+    //  명언 작성
+    // ─────────────────────────────────────────────
+
     @Transactional
-    public QuoteResponse createQuote(Long authorId, String content, String originalContent, List<Long> taggedMemberIds) {
+    public QuoteResponse createQuote(Long authorId, String content, String originalContent, String summary, List<Long> taggedMemberIds) {
+        validateQuoteContent(content);
         validateOneQuotePerDay(authorId);
 
         Member author = memberRepository.findById(authorId)
                 .orElseThrow(() -> new RuntimeException("회원을 찾을 수 없습니다."));
-
-        // AI 요약 로직 추가
-        String summary = geminiService.summarize(originalContent);
 
         Quote quote = Quote.builder()
                 .author(author)
@@ -66,16 +115,12 @@ public class QuoteService {
         quoteRepository.save(quote);
 
         if (taggedMemberIds != null && !taggedMemberIds.isEmpty()) {
-            List<Long> uniqueIds = taggedMemberIds.stream().distinct().toList();
-            for (Long memberId : taggedMemberIds) {
+            for (Long memberId : taggedMemberIds.stream().distinct().toList()) {
                 Member taggedMember = memberRepository.findById(memberId)
                         .orElseThrow(() -> new RuntimeException("태그된 회원을 찾을 수 없습니다."));
 
-                // 태그 저장
-                QuoteTag quoteTag = new QuoteTag(quote, taggedMember);
-                quoteTagRepository.save(quoteTag);
+                quoteTagRepository.save(new QuoteTag(quote, taggedMember));
 
-                // 알림 발송
                 notificationService.create(
                         taggedMember,
                         author,
@@ -100,7 +145,27 @@ public class QuoteService {
         }
     }
 
-    // 좋아요 등록
+    // ─────────────────────────────────────────────
+    //  AI 사용량 정보
+    // ─────────────────────────────────────────────
+
+    public Map<String, Object> getAiUsageInfo(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new GlobalException("404", "회원을 찾을 수 없습니다."));
+
+        LocalDate today = LocalDate.now();
+        int used = 0;
+        if (today.equals(member.getAiUsageDate())) {
+            used = member.getAiUsageCount();
+        }
+        int remaining = Math.max(0, 3 - used);
+        return Map.of("used", used, "remaining", remaining, "limit", 3);
+    }
+
+    // ─────────────────────────────────────────────
+    //  좋아요
+    // ─────────────────────────────────────────────
+
     @Transactional
     public void likeQuote(Member member, Long quoteId) {
         Quote quote = quoteRepository.findById(quoteId)
@@ -110,10 +175,8 @@ public class QuoteService {
             return;
         }
 
-        QuoteLike quoteLike = new QuoteLike(quote, member);
-        quoteLikeRepository.save(quoteLike);
+        quoteLikeRepository.save(new QuoteLike(quote, member));
 
-        // 좋아요 알림
         if (!quote.getAuthor().getId().equals(member.getId())) {
             notificationService.create(
                     quote.getAuthor(),
@@ -125,7 +188,6 @@ public class QuoteService {
         }
     }
 
-    // 좋아요 취소
     @Transactional
     public void unlikeQuote(Member member, Long quoteId) {
         Quote quote = quoteRepository.findById(quoteId)
@@ -134,62 +196,54 @@ public class QuoteService {
         quoteLikeRepository.findByQuoteAndMember(quote, member)
                 .ifPresent(quoteLikeRepository::delete);
     }
-    // 명언 목록 조회
-    public QuoteListDto getQuoteList(Member currentUser, LocalDate date) {
 
+    // ─────────────────────────────────────────────
+    //  명언 목록 조회 (피드) — groupId로 필터링 지원
+    // ─────────────────────────────────────────────
+
+    public QuoteListDto getQuoteList(Member currentUser, LocalDate date, Long groupId) {
         LocalDateTime startDate = date.atStartOfDay();
         LocalDateTime endDate = date.plusDays(1).atStartOfDay();
 
         List<Quote> quotes = quoteRepository.findAllByDateRange(startDate, endDate);
 
-        // 내 명언 목록
+        // 내 명언
         List<MyQuoteResponse> myQuotes = quotes.stream()
                 .filter(q -> q.getAuthor().getId().equals(currentUser.getId()))
-                .map(q -> {
-                    String groupName = getQuoteGroupName(q);
-
-//                    List<String> taggedNicknames = quoteTagRepository.findAllByQuote(q).stream()
-//                            .map(qt -> qt.getMember().getNickname()) // Entity 필드명(member/taggedMember) 확인 필요
-//                            .toList();
-//
-//                    return new MyQuoteResponse(
-//                            q.getId(),
-//                            q.getContent(),
-//                            groupName,
-//                            q.getAuthor().getNickname(),
-//                            String.valueOf(q.getAuthor().getBirthYear()),
-//                            taggedNicknames
-//                    );
-//                })
-//                .toList();
-                    //직접호출 대신 변경
-                    return MyQuoteResponse.from(q, groupName);
-                })
+                .map(q -> MyQuoteResponse.from(q, getQuoteGroupName(q)))
                 .toList();
 
-        // 친구 명언 목록
-        List<Member> myFriends = friendshipRepository.findAllByMember(currentUser).stream()
-                .map(Friendship::getFriend)
-                .toList();
+        // 다른 사람 명언 (그룹 필터 or 친구 필터)
+        List<Member> targetMembers;
+        if (groupId != null) {
+            Group group = groupRepository.findById(groupId)
+                    .orElseThrow(() -> new GlobalException("404", "그룹을 찾을 수 없습니다."));
+            targetMembers = groupMemberRepository.findByGroup(group).stream()
+                    .map(GroupMember::getMember)
+                    .filter(m -> !m.getId().equals(currentUser.getId()))
+                    .toList();
+        } else {
+            targetMembers = friendshipRepository.findAllByMember(currentUser).stream()
+                    .map(Friendship::getFriend)
+                    .toList();
+        }
 
-        // 친구인 경우만
         List<QuoteDetailResponse> otherQuotes = quotes.stream()
                 .filter(q -> !q.getAuthor().getId().equals(currentUser.getId()))
-                .filter(q -> myFriends.contains(q.getAuthor()))
+                .filter(q -> targetMembers.contains(q.getAuthor()))
                 .map(q -> {
                     boolean isLiked = quoteLikeRepository.existsByQuoteAndMember(q, currentUser);
-
+                    boolean isBookmarked = bookmarkRepository.existsByMemberAndQuote(currentUser, q);
                     List<String> taggedNicknames = quoteTagRepository.findAllByQuote(q).stream()
                             .map(qt -> qt.getMember().getNickname())
                             .toList();
-                    return QuoteDetailResponse.from(q, taggedNicknames, isLiked, true);
+                    return QuoteDetailResponse.from(q, taggedNicknames, isLiked, isBookmarked, true);
                 })
                 .toList();
 
         return new QuoteListDto(myQuotes, otherQuotes);
     }
 
-    // 명언 작성자가 속한 그룹
     private String getQuoteGroupName(Quote quote) {
         List<GroupMember> groupMembers = groupMemberRepository.findByMember(quote.getAuthor());
         if (!groupMembers.isEmpty()) {
@@ -198,77 +252,105 @@ public class QuoteService {
         return "아직 그룹이 없습니다.";
     }
 
-    // 로그인한 사용자
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
-            return null; // 인증되지 않은 사용자
+            return null;
         }
-
         if (authentication.getPrincipal() instanceof SecurityUser securityUser) {
             return securityUser.getMember().getId();
         }
-
         return null;
     }
 
-    public List<QuoteResponse> findMyQuotes(Long memberId) {
-        List<Quote> myQuotes = quoteRepository.findAllByAuthorId(memberId);
+    // ─────────────────────────────────────────────
+    //  아카이브 조회
+    // ─────────────────────────────────────────────
 
-        return myQuotes.stream()
+    public List<QuoteResponse> findMyQuotes(Long memberId) {
+        return quoteRepository.findAllByAuthorId(memberId).stream()
                 .map(QuoteResponse::new)
                 .collect(Collectors.toList());
     }
 
-    // 내가 좋아요 누른 명언 조회
     public List<QuoteResponse> findLikedQuotes(Long memberId) {
-        List<Quote> likedQuotes = quoteRepository.findQuotesLikedByMember(memberId);
-
-        return likedQuotes.stream()
+        return quoteRepository.findQuotesLikedByMember(memberId).stream()
                 .map(QuoteResponse::from)
                 .collect(Collectors.toList());
     }
 
-    // 특정 날짜의 전체 명언
-    public List<QuoteResponse> findQuotesByDate(LocalDate date) {
+    public List<QuoteResponse> findMyQuotesByDate(Long memberId, LocalDate date) {
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
 
-        List<Quote> quotes = quoteRepository.findAllByCreateDateBetweenOrderByCreateDateDesc(startOfDay, endOfDay);
-
-        return quotes.stream()
+        return quoteRepository.findAllByAuthorIdAndCreateDateBetweenOrderByCreateDateDesc(memberId, startOfDay, endOfDay)
+                .stream()
                 .map(QuoteResponse::new)
                 .toList();
     }
 
-    // 태그 수정 기능
+    // ─────────────────────────────────────────────
+    //  북마크
+    // ─────────────────────────────────────────────
+
+    @Transactional
+    public void bookmarkQuote(Long memberId, Long quoteId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new GlobalException("404", "회원을 찾을 수 없습니다."));
+        Quote quote = quoteRepository.findById(quoteId)
+                .orElseThrow(() -> new GlobalException("404", "명언을 찾을 수 없습니다."));
+
+        if (bookmarkRepository.existsByMemberAndQuote(member, quote)) {
+            throw new GlobalException("400-1", "이미 북마크한 명언입니다.");
+        }
+
+        bookmarkRepository.save(Bookmark.builder().member(member).quote(quote).build());
+    }
+
+    @Transactional
+    public void unbookmarkQuote(Long memberId, Long quoteId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new GlobalException("404", "회원을 찾을 수 없습니다."));
+        Quote quote = quoteRepository.findById(quoteId)
+                .orElseThrow(() -> new GlobalException("404", "명언을 찾을 수 없습니다."));
+
+        bookmarkRepository.findByMemberAndQuote(member, quote)
+                .ifPresentOrElse(bookmarkRepository::delete, () -> {
+                    throw new GlobalException("404", "북마크 정보를 찾을 수 없습니다.");
+                });
+    }
+
+    public List<QuoteResponse> findBookmarkedQuotes(Long memberId) {
+        return bookmarkRepository.findQuotesByMemberId(memberId).stream()
+                .map(QuoteResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    // ─────────────────────────────────────────────
+    //  태그
+    // ─────────────────────────────────────────────
+
     @Transactional
     public void updateTags(Long authorId, Long quoteId, List<Long> taggedMemberIds) {
         Quote quote = quoteRepository.findById(quoteId)
                 .orElseThrow(() -> new RuntimeException("명언을 찾을 수 없습니다."));
 
-        // 작성자 본인 확인
         if (!quote.getAuthor().getId().equals(authorId)) {
             throw new RuntimeException("수정 권한이 없습니다.");
         }
 
-        // 기존 태그 초기화
         quoteTagRepository.deleteAllByQuote(quote);
 
-        // 새로운 태그 저장 및 알림 발송
         if (taggedMemberIds != null && !taggedMemberIds.isEmpty()) {
             for (Long memberId : taggedMemberIds) {
                 Member taggedMember = memberRepository.findById(memberId)
                         .orElseThrow(() -> new RuntimeException("존재하지 않는 회원입니다."));
 
-                // 태그 저장
-                QuoteTag quoteTag = new QuoteTag(quote, taggedMember);
-                quoteTagRepository.save(quoteTag);
+                quoteTagRepository.save(new QuoteTag(quote, taggedMember));
 
-                // 알림 발송
                 notificationService.create(
-                        taggedMember,       // 받는 사람 (태그된 친구)
-                        quote.getAuthor(),  // 보낸 사람 (글쓴이)
+                        taggedMember,
+                        quote.getAuthor(),
                         "TAG",
                         quote.getAuthor().getName() + "님이 글에 태그했습니다.",
                         quote.getId()
@@ -276,7 +358,7 @@ public class QuoteService {
             }
         }
     }
-    // 태그 요청
+
     @Transactional
     public void requestTag(Long requesterId, Long quoteId) {
         Quote quote = quoteRepository.findById(quoteId)
@@ -290,11 +372,7 @@ public class QuoteService {
         }
 
         if (quoteTagRequestRepository.existsByQuoteAndRequester(quote, requester)) {
-            throw new RuntimeException("이미 태그 요청을 보냈습니다.");
-        }
-
-        if (quoteTagRequestRepository.existsByQuoteAndRequester(quote, requester)) {
-            throw new RuntimeException("이미 태그 요청을 보냈습니다.");
+            throw new GlobalException("400-1", "이미 태그 요청을 보냈습니다.");
         }
 
         QuoteTagRequest request = QuoteTagRequest.builder()
@@ -305,17 +383,27 @@ public class QuoteService {
 
         quoteTagRequestRepository.save(request);
 
-        // 알림 발송
         notificationService.create(
                 quote.getAuthor(),
-                requester,          
-                "TAG_REQUEST", 
+                requester,
+                "TAG_REQUEST",
                 requester.getName() + "님이 태그를 요청했습니다.",
                 quote.getId()
         );
     }
 
-    // 태그 요청 수락
+    /** 내 태그 요청 상태 조회 (PENDING / ACCEPTED / REJECTED / NONE) */
+    public String getMyTagRequestStatus(Long requesterId, Long quoteId) {
+        Quote quote = quoteRepository.findById(quoteId)
+                .orElseThrow(() -> new GlobalException("404", "명언을 찾을 수 없습니다."));
+        Member requester = memberRepository.findById(requesterId)
+                .orElseThrow(() -> new GlobalException("404", "회원을 찾을 수 없습니다."));
+
+        return quoteTagRequestRepository.findByQuoteAndRequester(quote, requester)
+                .map(req -> req.getStatus().name())
+                .orElse("NONE");
+    }
+
     @Transactional
     public void acceptTagRequest(Long authorId, Long requestId) {
         QuoteTagRequest request = quoteTagRequestRepository.findById(requestId)
@@ -335,19 +423,17 @@ public class QuoteService {
 
         request.accept();
 
-        QuoteTag quoteTag = new QuoteTag(request.getQuote(), request.getRequester());
-        quoteTagRepository.save(quoteTag);
+        quoteTagRepository.save(new QuoteTag(request.getQuote(), request.getRequester()));
 
         notificationService.create(
-                request.getRequester(),     
+                request.getRequester(),
                 request.getQuote().getAuthor(),
-                "TAG_ACCEPTED",                 
+                "TAG_ACCEPTED",
                 request.getQuote().getAuthor().getName() + "님이 태그 요청을 수락했습니다!",
-                request.getQuote().getId() 
+                request.getQuote().getId()
         );
     }
 
-    // 태그 요청 거절
     @Transactional
     public void rejectTagRequest(Long authorId, Long requestId) {
         QuoteTagRequest request = quoteTagRequestRepository.findById(requestId)
@@ -362,10 +448,8 @@ public class QuoteService {
         }
 
         request.reject();
-
     }
 
-    // 태그 요청 목록 조회
     public List<QuoteTagRequestResponse> getPendingTagRequests(Long authorId, Long quoteId) {
         Quote quote = quoteRepository.findById(quoteId)
                 .orElseThrow(() -> new GlobalException("404", "명언을 찾을 수 없습니다."));
@@ -374,14 +458,15 @@ public class QuoteService {
             throw new GlobalException("403", "권한이 없습니다.");
         }
 
-        List<QuoteTagRequest> requests = quoteTagRequestRepository.findAllByQuoteIdAndStatus(quoteId, TagRequestStatus.PENDING);
-
-        return requests.stream()
+        return quoteTagRequestRepository.findAllByQuoteIdAndStatus(quoteId, TagRequestStatus.PENDING).stream()
                 .map(QuoteTagRequestResponse::from)
                 .collect(Collectors.toList());
     }
 
-    // 콕 찌르기 실행
+    // ─────────────────────────────────────────────
+    //  콕 찌르기 (QuoteService 내 위임)
+    // ─────────────────────────────────────────────
+
     @Transactional
     public void poke(Member sender, Long receiverId) {
         Member receiver = memberRepository.findById(receiverId)
@@ -391,20 +476,16 @@ public class QuoteService {
             throw new RuntimeException("자기 자신은 콕 찌를 수 없습니다.");
         }
 
-        // 알림 서비스 호출 (POKE 타입)
         notificationService.create(
                 receiver,
                 sender,
                 "POKE",
                 sender.getNickname() + "님이 당신을 콕 찔렀습니다!",
-                null // 특정 글 ID가 없는 경우 null
+                null
         );
     }
 
-    // 받은 콕 찌르기 개수 조회
     public long getPokeCount(Long memberId) {
-        // NotificationService나 Repository에서 POKE 타입의 알림 개수를 카운트합니다.
         return notificationService.countUnreadByType(memberId, "POKE");
     }
 }
-

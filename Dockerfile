@@ -24,8 +24,7 @@ WORKDIR /opt/app
 # 빌드 산출물만 복사
 COPY --from=build /app/build/libs/*.jar app.jar
 
-EXPOSE 8080
-# (Actuator 없으면 HEALTHCHECK는 없어도 OK)
-# HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD curl -f http://localhost:8080/actuator/health || exit 1
+EXPOSE 8070
+# HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://localhost:8070/actuator/health || exit 1
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

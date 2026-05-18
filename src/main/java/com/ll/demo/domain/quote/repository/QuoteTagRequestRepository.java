@@ -5,6 +5,7 @@ import com.ll.demo.domain.quote.entity.Quote;
 import com.ll.demo.domain.quote.entity.QuoteTagRequest;
 import com.ll.demo.domain.quote.entity.TagRequestStatus;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface QuoteTagRequestRepository extends JpaRepository<QuoteTagRequest, Long> {
@@ -12,4 +13,6 @@ public interface QuoteTagRequestRepository extends JpaRepository<QuoteTagRequest
     boolean existsByQuoteAndRequester(Quote quote, Member requester);
 
     List<QuoteTagRequest> findAllByQuoteIdAndStatus(Long quoteId, TagRequestStatus status);
+
+    Optional<QuoteTagRequest> findByQuoteAndRequester(Quote quote, Member requester);
 }

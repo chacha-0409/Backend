@@ -15,6 +15,7 @@ import com.ll.demo.domain.member.member.dto.ProfileUpdateRequest;
 import com.ll.demo.domain.member.member.dto.SearchCombinedResponse;
 import com.ll.demo.domain.member.member.entity.Member;
 import com.ll.demo.domain.member.member.repository.MemberRepository;
+import com.ll.demo.domain.member.member.type.MemberProvider;
 import com.ll.demo.domain.quote.entity.Quote;
 import com.ll.demo.domain.quote.entity.QuoteLike;
 import com.ll.demo.domain.quote.entity.QuoteTag;
@@ -27,6 +28,7 @@ import com.ll.demo.global.security.AuthTokenService;
 import com.ll.demo.domain.quote.repository.QuoteTagRequestRepository;
 import com.ll.demo.domain.quote.entity.TagRequestStatus;
 import com.ll.demo.domain.quote.entity.QuoteTagRequest;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -205,6 +207,60 @@ public void updateProfile(Long memberId, ProfileUpdateRequest request, String im
         // 강제로 DB반영
         memberRepository.saveAndFlush(member);
         return refreshToken;
+    }
+
+    // AI 추천 횟수 체크 + 증가 (일 3회 제한, 날짜 바뀌면 초기화)
+    @Transactional
+    public void checkAndIncrementAiUsage(Member member) {
+        LocalDate today = LocalDate.now();
+
+        if (!today.equals(member.getAiUsageDate())) {
+            member.setAiUsageDate(today);
+            member.setAiUsageCount(0);
+        }
+
+        if (member.getAiUsageCount() >= 3) {
+            throw new GlobalException("429-1", "AI 추천은 하루 3회까지만 사용할 수 있습니다.");
+        }
+
+        member.setAiUsageCount(member.getAiUsageCount() + 1);
+        memberRepository.save(member);
+    }
+
+    // 소셜 로그인: 기존 회원 조회 or 신규 생성
+    @Transactional
+    public Member findOrCreateSocialMember(
+            MemberProvider provider, String providerId,
+            String email, String nickname, String profileImage) {
+
+        // 1. provider + providerId로 조회
+        Optional<Member> existing = memberRepository.findByProviderAndProviderId(provider, providerId);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        // 2. 동일 이메일의 LOCAL 계정이 있으면 provider 연결 후 반환
+        if (email != null) {
+            Optional<Member> localMember = memberRepository.findByEmail(email);
+            if (localMember.isPresent()) {
+                Member m = localMember.get();
+                m.setProvider(provider);
+                m.setProviderId(providerId);
+                return memberRepository.save(m);
+            }
+        }
+
+        // 3. 신규 소셜 회원 생성
+        String resolvedNickname = (nickname != null && !nickname.isBlank()) ? nickname : (email != null ? email.split("@")[0] : "user");
+        Member newMember = Member.builder()
+                .email(email)
+                .password(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
+                .nickname(resolvedNickname)
+                .profileImage(profileImage)
+                .provider(provider)
+                .providerId(providerId)
+                .build();
+        return memberRepository.save(newMember);
     }
 
     // 이하 게스트 초기 데이터 생성

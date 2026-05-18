@@ -10,34 +10,35 @@ public record QuoteDetailResponse(
         String content,
         List<String> taggedNicknames,
         String authorNickname,
+        String authorBirthYear,
         String authorProfileImage,
         String authorIntroduction,
         String timeAgo,
         boolean isLiked,
+        boolean isBookmarked,
         boolean isFriendQuote
 ) {
     public static QuoteDetailResponse from(
             Quote quote,
             List<String> taggedNicknames,
             boolean isLiked,
+            boolean isBookmarked,
             boolean isFriend
     ) {
         Duration duration = Duration.between(quote.getCreateDate(), LocalDateTime.now());
         String timeAgo = formatDuration(duration);
 
-        String content = (quote.getSummary() != null && !quote.getSummary().isBlank())
-                ? quote.getSummary()
-                : quote.getContent();
-
         return new QuoteDetailResponse(
                 quote.getId(),
-                quote.getSummary(), // 데이터만 summary로 교체
+                quote.getSummary(),
                 taggedNicknames,
                 quote.getAuthor().getNickname(),
+                quote.getAuthor().getBirthYear(),
                 quote.getAuthor().getProfileImage(),
                 quote.getAuthor().getIntroduction(),
                 timeAgo,
                 isLiked,
+                isBookmarked,
                 isFriend
         );
     }

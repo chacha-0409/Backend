@@ -21,27 +21,37 @@ public class ArchiveController {
 
     private final QuoteService quoteService;
 
-    // 날짜별 명언 조회
+    // 날짜별 내 명언 조회 (아카이브 캘린더)
     @GetMapping
-    public ResponseEntity<List<QuoteResponse>> getQuotesByDate(
-            @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date
+    public ResponseEntity<List<QuoteResponse>> getMyQuotesByDate(
+            @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+            @AuthenticationPrincipal SecurityUser user
     ) {
-        List<QuoteResponse> result = quoteService.findQuotesByDate(date);
+        List<QuoteResponse> result = quoteService.findMyQuotesByDate(user.getMember().getId(), date);
         return ResponseEntity.ok(result);
     }
 
-    // 내가 작성한 명언 목록
+    // 내가 작성한 명언 목록 (originalContent + summary 병기)
     @GetMapping("/me")
     public List<QuoteResponse> getMyQuotes(@AuthenticationPrincipal SecurityUser user) {
         return quoteService.findMyQuotes(user.getMember().getId());
     }
 
-    // 내가 좋아요한 명언 목록 조회
+    // 내가 좋아요한 명언 목록
     @GetMapping("/likes")
     public ResponseEntity<List<QuoteResponse>> getLikedQuotes(
             @AuthenticationPrincipal SecurityUser user
     ) {
         List<QuoteResponse> result = quoteService.findLikedQuotes(user.getMember().getId());
+        return ResponseEntity.ok(result);
+    }
+
+    // 내가 북마크한 명언 목록
+    @GetMapping("/bookmarks")
+    public ResponseEntity<List<QuoteResponse>> getBookmarkedQuotes(
+            @AuthenticationPrincipal SecurityUser user
+    ) {
+        List<QuoteResponse> result = quoteService.findBookmarkedQuotes(user.getMember().getId());
         return ResponseEntity.ok(result);
     }
 }

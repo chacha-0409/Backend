@@ -51,7 +51,8 @@ public class CustomAuthenticationFilter extends OncePerRequestFilter {
             }
             cookieBased = false;
         }
-        if (Ut.str.isBlank(accessToken) || Ut.str.isBlank(refreshToken)) {
+        // 헤더에서 아무것도 못 가져왔을 때만 쿠키 뒤지기
+        if (Ut.str.isBlank(accessToken) && Ut.str.isBlank(refreshToken)) {
             accessToken = rq.getCookieValue("accessToken", "");
             refreshToken = rq.getCookieValue("refreshToken", "");
             cookieBased = true;
