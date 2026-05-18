@@ -10,5 +10,7 @@ public record QuoteCreateRequest(
 
         String originalContent,
 
+        String summary,
+
         List<Long> taggedMemberIds
 ) {}

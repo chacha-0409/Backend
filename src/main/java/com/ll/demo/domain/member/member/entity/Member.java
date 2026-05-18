@@ -2,12 +2,14 @@ package com.ll.demo.domain.member.member.entity;
 
 import static lombok.AccessLevel.PROTECTED;
 import com.ll.demo.domain.member.member.type.Gender;
+import com.ll.demo.domain.member.member.type.MemberProvider;
 import com.ll.demo.global.jpa.entity.BaseTime;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -34,7 +36,7 @@ public class Member extends BaseTime {
     private String email;
 
     @Size(min = 8, message = "비밀번호는 최소 8자 이상이어야 합니다.")
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String password;
 
     @Size(max = 10, message = "닉네임은 10자 이내여야 합니다.")
@@ -42,13 +44,13 @@ public class Member extends BaseTime {
     private String nickname;
 
     @Size(min = 4, max = 4, message = "출생년도는 4자리로 입력해주세요.")
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String birthYear;
 
     @Column(length = 255)
     private String profileImage;
 
-    @Size(max = 30, message = "자기소개는 30자 이내로 작성해주세요.")
+    @Size(max = 20, message = "자기소개는 20자 이내로 작성해주세요.")
     @Column(nullable = true)
     private String introduction;
 
@@ -74,4 +76,19 @@ public class Member extends BaseTime {
     @Enumerated(EnumType.STRING)
     @Column(nullable = true)
     private Gender gender;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = true)
+    @Builder.Default
+    private MemberProvider provider = MemberProvider.LOCAL;
+
+    @Column(nullable = true)
+    private String providerId;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    @Builder.Default
+    private int aiUsageCount = 0;
+
+    @Column(nullable = true)
+    private LocalDate aiUsageDate;
 }

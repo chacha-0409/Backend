@@ -1,6 +1,9 @@
 package com.ll.demo.global.security;
 
 import com.ll.demo.global.rsData.RsData;
+import com.ll.demo.global.security.oauth2.OAuth2FailureHandler;
+import com.ll.demo.global.security.oauth2.OAuth2MemberService;
+import com.ll.demo.global.security.oauth2.OAuth2SuccessHandler;
 import com.ll.demo.standard.dto.util.Ut;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +22,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Slf4j
 public class SecurityConfig {
     private final CustomAuthenticationFilter customAuthenticationFilter;
+    private final OAuth2MemberService oAuth2MemberService;
+    private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final OAuth2FailureHandler oAuth2FailureHandler;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -36,6 +42,9 @@ public class SecurityConfig {
                                 // 인증, 로그인, 회원가입 등
                                 .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login", "/api/auth/guest-login").permitAll()
                                 .requestMatchers("/api/auth/refresh").permitAll()
+
+                                // OAuth2 소셜 로그인
+                                .requestMatchers("/oauth2/authorization/**", "/login/oauth2/code/**").permitAll()
                                 
                                 //.requestMatchers(HttpMethod.POST, "/api/*/members", "/api/*/members/login").permitAll()
                                 //.requestMatchers(HttpMethod.GET, "/g/*").permitAll()
@@ -78,6 +87,11 @@ public class SecurityConfig {
                                         }
                                 )
                 )
+                .oauth2Login(oauth2 -> oauth2
+                        .userInfoEndpoint(userInfo -> userInfo.userService(oAuth2MemberService))
+                        .successHandler(oAuth2SuccessHandler)
+                        .failureHandler(oAuth2FailureHandler)
+                )
                 .addFilterBefore(customAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -91,7 +105,8 @@ public class SecurityConfig {
         configuration.addAllowedOrigin("http://localhost:5173");
         configuration.addAllowedOrigin("https://quoteme.shop");
         configuration.addAllowedOrigin("https://quote--me.vercel.app");
-        configuration.addAllowedOrigin("https://www.quoteme.site/");
+        configuration.addAllowedOrigin("https://www.quoteme.site");
+        configuration.addAllowedOrigin("https://boastingly-unthirsty-kannon.ngrok-free.dev"); // ngrok url
 
         // 나머지 허용 설정
         configuration.addAllowedMethod("*");

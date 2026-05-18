@@ -1,5 +1,6 @@
 package com.ll.demo.domain.quote.controller;
 
+import com.ll.demo.domain.member.member.service.MemberService;
 import com.ll.demo.domain.quote.dto.AiSummaryReq;
 import com.ll.demo.domain.quote.dto.QuoteCreateRequest;
 import com.ll.demo.domain.quote.dto.QuoteListDto;
@@ -36,31 +37,49 @@ public class QuoteController {
 
     private final GeminiService geminiService;
     private final QuoteService quoteService;
+    private final MemberService memberService;
 
+    // 명언 작성
     @PostMapping
     public ResponseEntity<QuoteResponse> createQuote(
             @RequestBody QuoteCreateRequest request,
             @AuthenticationPrincipal SecurityUser user
     ) {
         Long authorId = user.getMember().getId();
-
         QuoteResponse response = quoteService.createQuote(
                 authorId,
                 request.content(),
                 request.originalContent(),
+                request.summary(),
                 request.taggedMemberIds()
         );
-
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    // AI 요약 (일기 → 명언)
+    // 일기 내용 검증 후 Gemini 호출
     @PostMapping("/summarize")
-    public ResponseEntity<Map<String, String>> summarizeQuote(@RequestBody AiSummaryReq req) {
+    public ResponseEntity<Map<String, String>> summarizeQuote(
+            @RequestBody AiSummaryReq req,
+            @AuthenticationPrincipal SecurityUser user
+    ) {
+        // 일기 유효성 검사 (15자 이하 / 불량 텍스트 거부)
+        quoteService.validateDiaryContent(req.content());
+        memberService.checkAndIncrementAiUsage(user.getMember());
         String summary = geminiService.summarize(req.content());
         return ResponseEntity.ok(Map.of("summary", summary));
     }
 
-    // 좋아요 등록 (POST)
+    // AI 사용량 조회 (하루 3회 제한)
+    // GET /api/quotes/ai-usage
+    @GetMapping("/ai-usage")
+    public ResponseEntity<Map<String, Object>> getAiUsage(
+            @AuthenticationPrincipal SecurityUser user
+    ) {
+        return ResponseEntity.ok(quoteService.getAiUsageInfo(user.getMember().getId()));
+    }
+
+    // 좋아요 등록
     @PostMapping("/{quoteId}/like")
     public ResponseEntity<Void> likeQuote(
             @PathVariable Long quoteId,
@@ -70,7 +89,7 @@ public class QuoteController {
         return ResponseEntity.ok().build();
     }
 
-    // 좋아요 취소 (DELETE)
+    // 좋아요 취소
     @DeleteMapping("/{quoteId}/like")
     public ResponseEntity<Void> unlikeQuote(
             @PathVariable Long quoteId,
@@ -80,38 +99,44 @@ public class QuoteController {
         return ResponseEntity.ok().build();
     }
 
-    // 글 목록 조회
+    // 피드 목록 조회 (그룹 필터 지원)
+    // GET /api/quotes?date=2026-03-01
+    // GET /api/quotes?date=2026-03-01&groupId=1  → 그룹 멤버 명언만
     @GetMapping
     public ResponseEntity<QuoteListDto> getQuoteList(
             @AuthenticationPrincipal SecurityUser securityUser,
             @RequestParam(value = "date", required = true)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(value = "groupId", required = false) Long groupId
     ) {
         if (securityUser == null) {
             throw new RuntimeException("로그인이 필요합니다.");
         }
-        return ResponseEntity.ok(quoteService.getQuoteList(securityUser.getMember(), date));
+        return ResponseEntity.ok(quoteService.getQuoteList(securityUser.getMember(), date, groupId));
     }
 
-    // 태그 요청
+    // 태그 요청 전송
     @PostMapping("/{quoteId}/tag-request")
     public ResponseEntity<RsData> requestTagToQuote(
             @PathVariable Long quoteId,
             @AuthenticationPrincipal SecurityUser securityUser
     ) {
         if (securityUser == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "401-1. 로그인 인증 정보가 유효하지 않습니다."
-            );
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "401-1. 로그인 인증 정보가 유효하지 않습니다.");
         }
-        // [수정 1] Member 객체 통째로 넘기는 게 아니라, ID만 꺼냅니다.
-        Long requesterId = securityUser.getMember().getId();
-
-        // [수정 2] 서비스에 새로 만든 통합 메서드 'requestTag'를 호출합니다.
-        // (빨간줄이 떴던 quoteService.requestTagToQuote(...) 지우고 이걸 넣으세요!)
-        quoteService.requestTag(requesterId, quoteId);
+        quoteService.requestTag(securityUser.getMember().getId(), quoteId);
         return ResponseEntity.status(HttpStatus.CREATED).body(RsData.of("201-3", "태그 요청이 명언 작성자에게 전송되었습니다."));
+    }
+
+    // 내 태그 요청 상태 확인 (+ 버튼 비활성화 여부용)
+    // GET /api/quotes/{quoteId}/my-tag-request → {"status": "PENDING" | "ACCEPTED" | "REJECTED" | "NONE"}
+    @GetMapping("/{quoteId}/my-tag-request")
+    public ResponseEntity<Map<String, String>> getMyTagRequest(
+            @PathVariable Long quoteId,
+            @AuthenticationPrincipal SecurityUser user
+    ) {
+        String status = quoteService.getMyTagRequestStatus(user.getMember().getId(), quoteId);
+        return ResponseEntity.ok(Map.of("status", status));
     }
 
     // 태그 수정
@@ -132,10 +157,7 @@ public class QuoteController {
             @AuthenticationPrincipal SecurityUser user
     ) {
         quoteService.acceptTagRequest(user.getMember().getId(), requestId);
-
-        return ResponseEntity.ok(
-                RsData.of("200", "태그 요청을 수락했습니다.")
-        );
+        return ResponseEntity.ok(RsData.of("200", "태그 요청을 수락했습니다."));
     }
 
     // 태그 요청 거절
@@ -145,10 +167,7 @@ public class QuoteController {
             @AuthenticationPrincipal SecurityUser user
     ) {
         quoteService.rejectTagRequest(user.getMember().getId(), requestId);
-
-        return ResponseEntity.ok(
-                RsData.of("200", "태그 요청을 거절했습니다.")
-        );
+        return ResponseEntity.ok(RsData.of("200", "태그 요청을 거절했습니다."));
     }
 
     // 태그 요청 목록 조회
@@ -159,5 +178,27 @@ public class QuoteController {
     ) {
         List<QuoteTagRequestResponse> response = quoteService.getPendingTagRequests(user.getMember().getId(), quoteId);
         return ResponseEntity.ok(response);
+    }
+
+    // 북마크 추가
+    // POST /api/quotes/{quoteId}/bookmark
+    @PostMapping("/{quoteId}/bookmark")
+    public ResponseEntity<RsData> bookmarkQuote(
+            @PathVariable Long quoteId,
+            @AuthenticationPrincipal SecurityUser user
+    ) {
+        quoteService.bookmarkQuote(user.getMember().getId(), quoteId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(RsData.of("201", "북마크에 추가되었습니다."));
+    }
+
+    // 북마크 취소
+    // DELETE /api/quotes/{quoteId}/bookmark
+    @DeleteMapping("/{quoteId}/bookmark")
+    public ResponseEntity<RsData> unbookmarkQuote(
+            @PathVariable Long quoteId,
+            @AuthenticationPrincipal SecurityUser user
+    ) {
+        quoteService.unbookmarkQuote(user.getMember().getId(), quoteId);
+        return ResponseEntity.ok(RsData.of("200", "북마크가 해제되었습니다."));
     }
 }

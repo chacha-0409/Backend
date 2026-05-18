@@ -18,6 +18,5 @@ public interface FriendshipRepository extends JpaRepository<Friendship, Long> {
     // 친구삭제
     void deleteByMemberAndFriend(Member member, Member friend);
 
-    // 추후 친구 쌍방향 수락해야 한다면 > 친구 관계 accepted 여부 확인
-    // boolean existsByMemberAndFriendAndStatus(Member member, Member friend, FriendshipStatus status);
+    Optional<Friendship> findByMemberAndFriend(Member member, Member friend);
 }

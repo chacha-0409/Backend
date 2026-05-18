@@ -11,8 +11,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
-import java.time.LocalDateTime;
-import java.util.List;
 
 public interface QuoteRepository extends JpaRepository<Quote, Long> {
     // 나의 명언 조회
@@ -20,6 +18,9 @@ public interface QuoteRepository extends JpaRepository<Quote, Long> {
 
     // 특정 날짜의 전체 명언 조회
     List<Quote> findAllByCreateDateBetweenOrderByCreateDateDesc(LocalDateTime start, LocalDateTime end);
+
+    // 특정 날짜의 특정 작성자 명언 조회 (아카이브 캘린더용)
+    List<Quote> findAllByAuthorIdAndCreateDateBetweenOrderByCreateDateDesc(Long authorId, LocalDateTime start, LocalDateTime end);
 
     // 1일 1명언 체크용
     boolean existsByAuthorIdAndCreateDateBetween(Long authorId, LocalDateTime start, LocalDateTime end);
@@ -42,4 +43,12 @@ public interface QuoteRepository extends JpaRepository<Quote, Long> {
 
     // 내가 작성한 글 모두 조회
     List<Quote> findAllByAuthorId(Long authorId);
+
+    // 특정 그룹 멤버들의 날짜 범위 명언 조회
+    @Query("SELECT q FROM Quote q WHERE q.author IN :members AND q.createDate >= :startDate AND q.createDate < :endDate ORDER BY q.createDate DESC")
+    List<Quote> findAllByAuthorsInAndDateRange(
+            @Param("members") Collection<Member> members,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 }

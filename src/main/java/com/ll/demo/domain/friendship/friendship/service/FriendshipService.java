@@ -1,16 +1,19 @@
 package com.ll.demo.domain.friendship.friendship.service;
 
+import com.ll.demo.domain.friendship.friendship.dto.FriendRequestResponse;
 import com.ll.demo.domain.friendship.friendship.entity.Friendship;
 import com.ll.demo.domain.friendship.friendship.repository.FriendshipRepository;
 import com.ll.demo.domain.friendship.friendship.type.FriendshipStatus;
-
 import com.ll.demo.domain.member.member.entity.Member;
 import com.ll.demo.domain.member.member.repository.MemberRepository;
+import com.ll.demo.domain.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -18,41 +21,100 @@ import org.springframework.web.server.ResponseStatusException;
 public class FriendshipService {
     private final FriendshipRepository friendshipRepository;
     private final MemberRepository memberRepository;
+    private final NotificationService notificationService;
 
+    // 친구 요청 전송 (단방향 REQUESTED)
     @Transactional
-    public void addFriendship(Member memberA, Long memberBId) {
-
-        Member memberB = memberRepository.findById(memberBId)
+    public void sendFriendRequest(Member requester, Long targetId) {
+        Member target = memberRepository.findById(targetId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대상 회원을 찾을 수 없습니다."));
 
-        if (memberA.getId().equals(memberBId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "자기 자신을 친구로 추가할 수 없습니다.");
+        if (requester.getId().equals(targetId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "자기 자신에게 요청할 수 없습니다.");
         }
 
-        if (friendshipRepository.existsByMemberAndFriend(memberA, memberB)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 친구 관계입니다.");
+        // 양방향 모두 이미 레코드가 있으면 차단 (이미 친구이거나 대기 중)
+        if (friendshipRepository.existsByMemberAndFriend(requester, target) ||
+                friendshipRepository.existsByMemberAndFriend(target, requester)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 친구이거나 대기 중인 요청이 있습니다.");
         }
 
-        Friendship friendshipAtoB = Friendship.builder()
-                .member(memberA)
-                .friend(memberB)
-                .status(FriendshipStatus.ACCEPTED) // 즉시 ACCEPTED
-                .build();
-        friendshipRepository.save(friendshipAtoB);
+        friendshipRepository.save(Friendship.builder()
+                .member(requester)
+                .friend(target)
+                .status(FriendshipStatus.REQUESTED)
+                .build());
 
-        Friendship friendshipBtoA = Friendship.builder()
-                .member(memberB)
-                .friend(memberA)
-                .status(FriendshipStatus.ACCEPTED) // 즉시 ACCEPTED
-                .build();
-        friendshipRepository.save(friendshipBtoA);
+        notificationService.create(
+                target,
+                requester,
+                "FRIEND_REQUEST",
+                requester.getNickname() + "님이 친구 요청을 보냈습니다.",
+                requester.getId()
+        );
     }
 
+    // 받은 친구 요청 목록 조회
+    public List<FriendRequestResponse> getReceivedRequests(Member member) {
+        return friendshipRepository.findByFriendAndStatus(member, FriendshipStatus.REQUESTED)
+                .stream()
+                .map(FriendRequestResponse::from)
+                .toList();
+    }
+
+    // 친구 요청 수락
+    @Transactional
+    public void acceptFriendRequest(Member me, Long requestId) {
+        Friendship request = friendshipRepository.findById(requestId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "요청을 찾을 수 없습니다."));
+
+        if (!request.getFriend().getId().equals(me.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "권한이 없습니다.");
+        }
+        if (request.getStatus() != FriendshipStatus.REQUESTED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "처리할 수 없는 요청입니다.");
+        }
+
+        // 기존 레코드 ACCEPTED 처리
+        request.updateStatus(FriendshipStatus.ACCEPTED);
+
+        // 역방향 레코드 생성 (양방향 친구 관계 완성)
+        friendshipRepository.save(Friendship.builder()
+                .member(me)
+                .friend(request.getMember())
+                .status(FriendshipStatus.ACCEPTED)
+                .build());
+
+        notificationService.create(
+                request.getMember(),
+                me,
+                "FRIEND_ACCEPTED",
+                me.getNickname() + "님이 친구 요청을 수락했습니다.",
+                me.getId()
+        );
+    }
+
+    // 친구 요청 거절
+    @Transactional
+    public void rejectFriendRequest(Member me, Long requestId) {
+        Friendship request = friendshipRepository.findById(requestId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "요청을 찾을 수 없습니다."));
+
+        if (!request.getFriend().getId().equals(me.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "권한이 없습니다.");
+        }
+        if (request.getStatus() != FriendshipStatus.REQUESTED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "처리할 수 없는 요청입니다.");
+        }
+
+        request.updateStatus(FriendshipStatus.REJECTED);
+    }
+
+    // 친구 삭제
     @Transactional
     public void removeFriend(Member actor, Long friendId) {
         Member friend = memberRepository.findById(friendId)
                 .orElseThrow(() -> new RuntimeException("해당 회원을 찾을 수 없습니다."));
-        // 쌍방향 삭제
         friendshipRepository.deleteByMemberAndFriend(actor, friend);
         friendshipRepository.deleteByMemberAndFriend(friend, actor);
     }

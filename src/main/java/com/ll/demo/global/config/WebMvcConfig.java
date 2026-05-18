@@ -13,7 +13,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .allowedOrigins(
                         "http://localhost:5173",  // 로컬 프론트엔드 개발 환경
                         "https://quoteme.shop",
-                        "http://localhost:8080",
+                        "http://localhost:8070",
                         "https://quote--me.vercel.app",   // Vercel 배포 주소
                         "https://www.quoteme.site",
                         "https://www.quoteme.site/"

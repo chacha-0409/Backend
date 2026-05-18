@@ -22,5 +22,11 @@ public class GroupJoinRequest extends BaseTime {
     @Enumerated(EnumType.STRING)
     private JoinStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private InviteType type = InviteType.JOIN_REQUEST;
+
     public void accept() { this.status = JoinStatus.ACCEPTED; }
+    public void reject() { this.status = JoinStatus.REJECTED; }
 }
