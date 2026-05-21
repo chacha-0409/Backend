@@ -1,34 +1,24 @@
 package com.ll.demo.domain.quote.controller;
 
 import com.ll.demo.domain.member.member.service.MemberService;
-import com.ll.demo.domain.quote.dto.AiSummaryReq;
-import com.ll.demo.domain.quote.dto.QuoteCreateRequest;
-import com.ll.demo.domain.quote.dto.QuoteListDto;
-import com.ll.demo.domain.quote.dto.QuoteResponse;
-import com.ll.demo.domain.quote.dto.QuoteTagRequestResponse;
-import com.ll.demo.domain.quote.dto.QuoteTagUpdateReq;
+import com.ll.demo.domain.quote.dto.*;
 import com.ll.demo.domain.quote.service.QuoteService;
+import com.ll.demo.global.dto.PagedResponse;
 import com.ll.demo.global.gemini.GeminiService;
 import com.ll.demo.global.rsData.RsData;
 import com.ll.demo.global.security.SecurityUser;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
+import com.ll.demo.standard.rq.Rq;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/quotes")
@@ -38,6 +28,7 @@ public class QuoteController {
     private final GeminiService geminiService;
     private final QuoteService quoteService;
     private final MemberService memberService;
+    private final Rq rq;
 
     // 명언 작성
     @PostMapping
@@ -201,4 +192,15 @@ public class QuoteController {
         quoteService.unbookmarkQuote(user.getMember().getId(), quoteId);
         return ResponseEntity.ok(RsData.of("200", "북마크가 해제되었습니다."));
     }
+
+    @GetMapping
+    public RsData<PagedResponse<QuoteDetailResponse>> getFeed(
+            @RequestParam LocalDate date,
+            @RequestParam(required = false) Long groupId
+    ) {
+        Long memberId = rq.getMember().getId();
+        PagedResponse<QuoteDetailResponse> response = quoteService.getFeed(memberId, date, groupId);
+        return RsData.of("200-1", "피드 조회 성공", response);
+    }
+
 }

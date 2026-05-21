@@ -56,3 +56,6 @@ custom:
     backUrl: "${custom.dev.backUrl}"
   accessToken:
     expirationSec: 600
+    jwt:
+      secretKey: "sdfsd2312fdfs231k7845fddsfds234adcxzcc"
+      accessTokenExpiration: 3600

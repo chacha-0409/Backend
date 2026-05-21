@@ -4,11 +4,19 @@ import com.ll.demo.domain.friendship.friendship.entity.Friendship;
 import com.ll.demo.domain.friendship.friendship.type.FriendshipStatus;
 import com.ll.demo.domain.member.member.entity.Member;
 import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.Optional;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import java.util.List;
+import java.util.Optional;
 
 public interface FriendshipRepository extends JpaRepository<Friendship, Long> {
     List<Friendship> findAllByMember(Member member);
+
+    // 엔티티 내부의 친구 ID
+    @Query("SELECT f.friend.id FROM Friendship f WHERE f.member.id = :memberId")
+    List<Long> findFriendIds(@Param("memberId") Long memberId);
+
     // 중복 요청 방지
     boolean existsByMemberAndFriend(Member member, Member friend);
     // 받은 친구 요청 목록 조회
