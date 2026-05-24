@@ -12,6 +12,7 @@ import com.ll.demo.domain.notification.service.NotificationService;
 import com.ll.demo.domain.quote.dto.*;
 import com.ll.demo.domain.quote.entity.*;
 import com.ll.demo.domain.quote.repository.*;
+import com.ll.demo.global.dto.PagedResponse;
 import com.ll.demo.global.exceptions.GlobalException;
 import com.ll.demo.global.security.SecurityUser;
 import lombok.RequiredArgsConstructor;
@@ -44,12 +45,9 @@ public class QuoteService {
     private final GroupMemberRepository groupMemberRepository;
     private final GroupRepository groupRepository;
     private final BookmarkRepository bookmarkRepository;
-
-    // ─────────────────────────────────────────────
     //  입력 검증
-    // ─────────────────────────────────────────────
 
-    /** 명언(content) 검증: 30자 초과 불가, 불량 텍스트 불가 */
+    /** 검증: 30자 초과 불가, 불량 텍스트 불가 */
     private void validateQuoteContent(String content) {
         if (content == null || content.isBlank()) {
             throw new GlobalException("400-1", "내용을 입력해주세요.");
@@ -62,7 +60,7 @@ public class QuoteService {
         }
     }
 
-    /** 일기(diary) 검증: 15자 이하 경고, 불량 텍스트 불가 */
+    /** 15자 이하 경고, 불량 텍스트 불가 */
     public void validateDiaryContent(String content) {
         if (content == null || content.isBlank()) {
             throw new GlobalException("400-1", "내용을 입력해주세요.");
@@ -84,18 +82,16 @@ public class QuoteService {
         String noSpace = text.replaceAll("\\s", "");
         if (noSpace.isBlank()) return true;
 
-        // 한국어 자음만 (U+3131~U+314E)
+        // 한국어 자음만
         boolean onlyKoreanConsonants = noSpace.chars().allMatch(c -> c >= 0x3131 && c <= 0x314E);
         if (onlyKoreanConsonants) return true;
 
-        // 글자(letter) 또는 숫자가 하나도 없으면 특수문자만
+        // 글자 또는 숫자가 하나도 없으면 특수문자만
         boolean onlySpecialChars = noSpace.chars().noneMatch(Character::isLetterOrDigit);
         return onlySpecialChars;
     }
 
-    // ─────────────────────────────────────────────
     //  명언 작성
-    // ─────────────────────────────────────────────
 
     @Transactional
     public QuoteResponse createQuote(Long authorId, String content, String originalContent, String summary, List<Long> taggedMemberIds) {
@@ -145,9 +141,7 @@ public class QuoteService {
         }
     }
 
-    // ─────────────────────────────────────────────
     //  AI 사용량 정보
-    // ─────────────────────────────────────────────
 
     public Map<String, Object> getAiUsageInfo(Long memberId) {
         Member member = memberRepository.findById(memberId)
@@ -162,9 +156,7 @@ public class QuoteService {
         return Map.of("used", used, "remaining", remaining, "limit", 3);
     }
 
-    // ─────────────────────────────────────────────
     //  좋아요
-    // ─────────────────────────────────────────────
 
     @Transactional
     public void likeQuote(Member member, Long quoteId) {
@@ -196,10 +188,6 @@ public class QuoteService {
         quoteLikeRepository.findByQuoteAndMember(quote, member)
                 .ifPresent(quoteLikeRepository::delete);
     }
-
-    // ─────────────────────────────────────────────
-    //  명언 목록 조회 (피드) — groupId로 필터링 지원
-    // ─────────────────────────────────────────────
 
     public QuoteListDto getQuoteList(Member currentUser, LocalDate date, Long groupId) {
         LocalDateTime startDate = date.atStartOfDay();
@@ -263,9 +251,7 @@ public class QuoteService {
         return null;
     }
 
-    // ─────────────────────────────────────────────
-    //  아카이브 조회
-    // ─────────────────────────────────────────────
+    // 아카이브 조회
 
     public List<QuoteResponse> findMyQuotes(Long memberId) {
         return quoteRepository.findAllByAuthorId(memberId).stream()
@@ -289,9 +275,7 @@ public class QuoteService {
                 .toList();
     }
 
-    // ─────────────────────────────────────────────
-    //  북마크
-    // ─────────────────────────────────────────────
+    // 북마크
 
     @Transactional
     public void bookmarkQuote(Long memberId, Long quoteId) {
@@ -326,9 +310,7 @@ public class QuoteService {
                 .collect(Collectors.toList());
     }
 
-    // ─────────────────────────────────────────────
-    //  태그
-    // ─────────────────────────────────────────────
+    // 태그
 
     @Transactional
     public void updateTags(Long authorId, Long quoteId, List<Long> taggedMemberIds) {
@@ -463,9 +445,7 @@ public class QuoteService {
                 .collect(Collectors.toList());
     }
 
-    // ─────────────────────────────────────────────
-    //  콕 찌르기 (QuoteService 내 위임)
-    // ─────────────────────────────────────────────
+    // 콕 찌르기
 
     @Transactional
     public void poke(Member sender, Long receiverId) {
@@ -487,5 +467,35 @@ public class QuoteService {
 
     public long getPokeCount(Long memberId) {
         return notificationService.countUnreadByType(memberId, "POKE");
+    }
+
+    public PagedResponse<QuoteDetailResponse> getFeed(Long memberId, LocalDate date, Long groupId) {
+        List<Long> friendIds = friendshipRepository.findFriendIds(memberId);
+
+        if (friendIds.isEmpty()) {
+            return PagedResponse.empty("친구를 추가하면 매일 피드에서 명언을 확인할 수 있어요");
+        }
+
+        List<Quote> quotes = quoteRepository.findFeedQuotes(friendIds, date, groupId);
+
+        if (quotes.isEmpty()) {
+            return PagedResponse.empty("아직 아무도 명언을 작성하지 않았어요");
+        }
+
+        Member currentUser = memberRepository.findById(memberId)
+                .orElseThrow(() -> new GlobalException("404", "회원을 찾을 수 없습니다."));
+
+        List<QuoteDetailResponse> result = quotes.stream()
+                .map(q -> {
+                    boolean isLiked = quoteLikeRepository.existsByQuoteAndMember(q, currentUser);
+                    boolean isBookmarked = bookmarkRepository.existsByMemberAndQuote(currentUser, q);
+                    List<String> taggedNicknames = quoteTagRepository.findAllByQuote(q).stream()
+                            .map(qt -> qt.getMember().getNickname())
+                            .toList();
+                    return QuoteDetailResponse.from(q, taggedNicknames, isLiked, isBookmarked, true);
+                })
+                .toList();
+
+        return PagedResponse.of(result);
     }
 }

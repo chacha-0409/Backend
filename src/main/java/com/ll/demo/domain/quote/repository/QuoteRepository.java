@@ -1,18 +1,21 @@
 package com.ll.demo.domain.quote.repository;
 
-import com.ll.demo.domain.quote.entity.Quote;
-// import io.lettuce.core.dynamic.annotation.Param;
-import java.time.LocalDateTime;
-import java.util.List;
-import org.springframework.data.jpa.repository.JpaRepository;
 import com.ll.demo.domain.member.member.entity.Member;
-import org.springframework.data.jpa.repository.Query;
+import com.ll.demo.domain.quote.entity.Quote;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 
 public interface QuoteRepository extends JpaRepository<Quote, Long> {
+    // 특정 날짜의 친구들 명언 조호;
+    @Query("SELECT q FROM Quote q WHERE q.author.id IN :friendIds AND q.createDate >= :#{#date.atStartOfDay()} AND q.createDate <= :#{#date.atTime(java.time.LocalTime.MAX)} ORDER BY q.createDate DESC")
+    List<Quote> findFeedQuotes(@Param("friendIds") List<Long> friendIds, @Param("date") java.time.LocalDate date, @Param("groupId") Long groupId);
+
     // 나의 명언 조회
     List<Quote> findAllByAuthorIdOrderByCreateDateDesc(Long authorId);
 
@@ -51,4 +54,6 @@ public interface QuoteRepository extends JpaRepository<Quote, Long> {
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
     );
+
+
 }
