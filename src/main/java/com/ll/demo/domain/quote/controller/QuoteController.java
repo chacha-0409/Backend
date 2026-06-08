@@ -200,7 +200,7 @@ public class QuoteController {
     ) {
         Long memberId = rq.getMember().getId();
         PagedResponse<QuoteDetailResponse> response = quoteService.getFeed(memberId, date, groupId);
-        return RsData.of("200-1", "피드 조회 성공", response);
+        return RsData.of("200-1", response);
     }
 
 }

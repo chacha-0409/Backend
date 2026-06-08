@@ -1,5 +1,6 @@
 package com.ll.demo.domain.quote.repository;
 
+import java.time.LocalDate;
 import com.ll.demo.domain.member.member.entity.Member;
 import com.ll.demo.domain.quote.entity.Quote;
 import org.springframework.data.domain.Sort;

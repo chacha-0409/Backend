@@ -476,7 +476,7 @@ public class QuoteService {
             return PagedResponse.empty("친구를 추가하면 매일 피드에서 명언을 확인할 수 있어요");
         }
 
-        List<Quote> quotes = quoteRepository.findFeedQuotes(friendIds, date, groupId);
+        List<Quote> quotes = quoteRepository.findFeedQuotes(friendIds, date);
 
         if (quotes.isEmpty()) {
             return PagedResponse.empty("아직 아무도 명언을 작성하지 않았어요");
