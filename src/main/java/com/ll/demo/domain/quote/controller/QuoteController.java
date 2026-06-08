@@ -193,7 +193,7 @@ public class QuoteController {
         return ResponseEntity.ok(RsData.of("200", "북마크가 해제되었습니다."));
     }
 
-    @GetMapping
+    @GetMapping("/feed")
     public RsData<PagedResponse<QuoteDetailResponse>> getFeed(
             @RequestParam LocalDate date,
             @RequestParam(required = false) Long groupId
