@@ -71,22 +71,22 @@ logging:
     org.hibernate.orm.jdbc.bind: TRACE
     org.hibernate.orm.jdbc.extract: TRACE
     org.springframework.transaction.interceptor: TRACE
-  custom:
-    dev:
-      cookieDomain: "3.38.96.140"
-      frontUrl: "http://localhost:5173"
-      backUrl: "http://3.38.96.140:8070"
-    prod:
-      cookieDomain: www.surl.oa.gg
-      frontUrl: "https://${custom.prod.cookieDomain}"
-      backUrl: "https://api.${custom.prod.cookieDomain}"
-    site:
-      name: "QUOTEME DEV"
-      cookieDomain: "${custom.dev.cookieDomain}"
-      frontUrl: "${custom.dev.frontUrl}"
-      backUrl: "${custom.dev.backUrl}"
-    accessToken:
-      expirationSec: 600
-    jwt:
-      secretKey: ${JWT_SECRET_KEY}
-      accessTokenExpiration: 3600
+custom:
+  dev:
+    cookieDomain: "3.38.96.140"
+    frontUrl: "http://localhost:5173"
+    backUrl: "http://3.38.96.140:8070"
+  prod:
+    cookieDomain: www.surl.oa.gg
+    frontUrl: "https://${custom.prod.cookieDomain}"
+    backUrl: "https://api.${custom.prod.cookieDomain}"
+  site:
+    name: "QUOTEME DEV"
+    cookieDomain: "${custom.dev.cookieDomain}"
+    frontUrl: "${custom.dev.frontUrl}"
+    backUrl: "${custom.dev.backUrl}"
+  accessToken:
+    expirationSec: 600
+  jwt:
+    secretKey: ${JWT_SECRET_KEY}
+    accessTokenExpiration: 3600
