@@ -87,6 +87,8 @@ custom:
     cookieDomain: "${custom.dev.cookieDomain}"
     frontUrl: "${custom.dev.frontUrl}"
     backUrl: "${custom.dev.backUrl}"
+  frontend:
+    allowed-origins: ${CUSTOM_FRONTEND_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
   accessToken:
     expirationSec: 600
   jwt:

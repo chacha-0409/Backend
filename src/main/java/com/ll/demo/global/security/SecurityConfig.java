@@ -7,6 +7,7 @@ import com.ll.demo.global.security.oauth2.OAuth2SuccessHandler;
 import com.ll.demo.standard.dto.util.Ut;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -28,6 +29,9 @@ public class SecurityConfig {
     private final OAuth2MemberService oAuth2MemberService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final OAuth2FailureHandler oAuth2FailureHandler;
+
+    @Value("${custom.frontend.allowed-origins:http://localhost:3000,http://localhost:5173}")
+    private String allowedFrontendOrigins;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -110,15 +114,21 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // 허용할 주소 (프론트엔드 & 로컬)
-        configuration.addAllowedOrigin("http://localhost:5173");
-        configuration.addAllowedOrigin("https://quoteme.shop");
-        configuration.addAllowedOrigin("https://quote--me.vercel.app");
-        configuration.addAllowedOrigin("https://www.quoteme.site");
-        configuration.addAllowedOrigin("https://boastingly-unthirsty-kannon.ngrok-free.dev"); // ngrok url
+        // 로컬 개발 환경과 프론트엔드 도메인 허용
+        for (String origin : allowedFrontendOrigins.split(",")) {
+            configuration.addAllowedOrigin(origin.trim());
+        }
 
-        // 나머지 허용 설정
-        configuration.addAllowedMethod("*");
+        configuration.addAllowedOriginPattern("http://localhost:*");
+        configuration.addAllowedOriginPattern("https://localhost:*");
+
+        configuration.addAllowedMethod("GET");
+        configuration.addAllowedMethod("POST");
+        configuration.addAllowedMethod("PUT");
+        configuration.addAllowedMethod("PATCH");
+        configuration.addAllowedMethod("DELETE");
+        configuration.addAllowedMethod("OPTIONS");
+
         configuration.addAllowedHeader("*");
         configuration.setAllowCredentials(true);
 
