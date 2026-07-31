@@ -1,7 +1,6 @@
 package com.ll.demo.global.security;
 
 import com.ll.demo.global.rsData.RsData;
-import com.ll.demo.global.security.oauth2.OAuth2CookieAuthorizationRequestRepository;
 import com.ll.demo.global.security.oauth2.OAuth2FailureHandler;
 import com.ll.demo.global.security.oauth2.OAuth2MemberService;
 import com.ll.demo.global.security.oauth2.OAuth2SuccessHandler;
@@ -29,35 +28,6 @@ public class SecurityConfig {
     private final OAuth2MemberService oAuth2MemberService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final OAuth2FailureHandler oAuth2FailureHandler;
-    private final OAuth2CookieAuthorizationRequestRepository cookieAuthorizationRequestRepository;
-
-    private final org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository;
-
-    private final HttpSessionOAuth2AuthorizationRequestRepository authorizationRequestRepository =
-            new HttpSessionOAuth2AuthorizationRequestRepository();
-
-    private org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver customAuthorizationRequestResolver(
-            org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository) {
-
-        org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver resolver =
-                new org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver(
-                        clientRegistrationRepository, "/oauth2/authorization"
-                );
-
-        resolver.setAuthorizationRequestCustomizer(builder -> {
-            // 빌더 객체에서 빌드된 중간 요청 결과물을 꺼내서 현재 어떤 클라이언트(kakao/google)인지 안전하게 판별합니다.
-            org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest request = builder.build();
-            String ngrokBase = "https://boastingly-unthirsty-kannon.ngrok-free.dev";
-
-            if (request.getRedirectUri().contains("kakao")) {
-                builder.redirectUri(ngrokBase + "/login/oauth2/code/kakao");
-            } else if (request.getRedirectUri().contains("google")) {
-                builder.redirectUri(ngrokBase + "/login/oauth2/code/google");
-            }
-        });
-
-        return resolver;
-    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -127,11 +97,6 @@ public class SecurityConfig {
                                 )
                 )
                 .oauth2Login(oauth2 -> oauth2
-                        .authorizationEndpoint(authorization -> authorization
-                                .authorizationRequestRepository(authorizationRequestRepository)
-                                // 수정: 주입받은 필드 객체를 인자로 전달
-                                .authorizationRequestResolver(customAuthorizationRequestResolver(clientRegistrationRepository))
-                        )
                         .userInfoEndpoint(userInfo -> userInfo.userService(oAuth2MemberService))
                         .successHandler(oAuth2SuccessHandler)
                         .failureHandler(oAuth2FailureHandler)
