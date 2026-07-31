@@ -13,7 +13,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -25,6 +24,7 @@ import org.springframework.web.filter.ForwardedHeaderFilter;
 @RequiredArgsConstructor
 @Slf4j
 public class SecurityConfig {
+
     private final CustomAuthenticationFilter customAuthenticationFilter;
     private final OAuth2MemberService oAuth2MemberService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
@@ -35,70 +35,36 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .authorizeHttpRequests(authorizeHttpRequests ->
-                        authorizeHttpRequests
-                                // 화이트리스트
-                                // 개발도구 
-                                .requestMatchers("/", "/favicon.ico", "/error").permitAll()
-                                .requestMatchers("/h2-console/**", "/actuator/**").permitAll()
-                                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-
-                                // 인증, 로그인, 회원가입 등
-                                .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login", "/api/auth/guest-login").permitAll()
-                                .requestMatchers("/api/auth/refresh").permitAll()
-
-                                // OAuth2 소셜 로그인
-                                .requestMatchers("/oauth2/authorization/**", "/login/oauth2/code/**").permitAll()
-                                
-                                //.requestMatchers(HttpMethod.POST, "/api/*/members", "/api/*/members/login").permitAll()
-                                //.requestMatchers(HttpMethod.GET, "/g/*").permitAll()
-
-                                // 로그아웃은 일단 permitAll
-                                .requestMatchers("/api/auth/logout").permitAll()
-
-                                // 이하 모든 api 및 요청은 인증 필수
-                                .requestMatchers("/api/**").authenticated()
-                                .anyRequest().authenticated()
-                        )
-                .headers(
-                        headers ->
-                                headers.frameOptions(
-                                        frameOptions ->
-                                                frameOptions.sameOrigin()
-                                )
+                .csrf(csrf -> csrf.disable())
+                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/", "/favicon.ico", "/error").permitAll()
+                        .requestMatchers("/h2-console/**", "/actuator/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/refresh").permitAll()
+                        .requestMatchers("/oauth2/authorization/**", "/login/oauth2/code/**").permitAll()
+                        .requestMatchers("/api/auth/logout").permitAll()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().authenticated()
                 )
-
-                .csrf(
-                        csrf ->
-                                csrf.disable() // REST API 사용을 위해 CSRF 비활성화
-                )
-                .formLogin(
-                        formLogin ->
-                                formLogin
-                                        .permitAll()
-                )
-
+                .formLogin(formLogin -> formLogin.permitAll())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)
-                        .sessionFixation(sessionFixation -> sessionFixation.none()) // 세션 고정 보호 임시 비활성화
+                        .sessionFixation(sessionFixation -> sessionFixation.none())
                 )
-
-                .exceptionHandling(
-                        exceptionHandling -> exceptionHandling
-                                .authenticationEntryPoint(
-                                        (request, response, authException) -> {
-                                            response.setContentType("application/json;charset=UTF-8");
-                                            response.setStatus(403);
-                                            response.getWriter().write(
-                                                    Ut.json.toString(
-                                                            RsData.of("403-1", request.getRequestURI() + ", " + authException.getLocalizedMessage())
-                                                    )
-                                            );
-                                        }
-                                )
+                .exceptionHandling(exceptionHandling -> exceptionHandling
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.setStatus(403);
+                            response.getWriter().write(
+                                    Ut.json.toString(
+                                            RsData.of("403-1", request.getRequestURI() + ", " + authException.getLocalizedMessage())
+                                    )
+                            );
+                        })
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfo -> userInfo.userService(oAuth2MemberService))
@@ -108,19 +74,25 @@ public class SecurityConfig {
                 .addFilterBefore(customAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
-
     }
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // 로컬 개발 환경과 프론트엔드 도메인 허용
         for (String origin : allowedFrontendOrigins.split(",")) {
-            configuration.addAllowedOrigin(origin.trim());
+            String trimmed = origin.trim();
+            if (!trimmed.isEmpty()) {
+                configuration.addAllowedOrigin(trimmed);
+            }
         }
 
         configuration.addAllowedOriginPattern("http://localhost:*");
         configuration.addAllowedOriginPattern("https://localhost:*");
+        configuration.addAllowedOrigin("https://quoteme.shop");
+        configuration.addAllowedOrigin("https://quote--me.vercel.app");
+        configuration.addAllowedOrigin("https://www.quoteme.site");
+        configuration.addAllowedOrigin("http://3.38.96.140:8070");
 
         configuration.addAllowedMethod("GET");
         configuration.addAllowedMethod("POST");
@@ -148,7 +120,6 @@ public class SecurityConfig {
 
                 filterChain.doFilter(request, response);
 
-                // 응답 헤더의 Set-Cookie를 찾아 SameSite=None; Secure 속성을 강제로 보완
                 java.util.Collection<String> headers = response.getHeaders("Set-Cookie");
                 boolean first = true;
                 for (String header : headers) {
@@ -176,4 +147,3 @@ public class SecurityConfig {
         return new ForwardedHeaderFilter();
     }
 }
-
